@@ -38,6 +38,7 @@ export default defineConfig([
     ignores: [
       "prettier.config.js",
       "commitlint.config.js",
+      "src/components/ui/**/*.tsx",
       "src/routeTree.gen.ts",
       ".tanstack",
       ".vscode",
