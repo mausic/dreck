@@ -37,6 +37,7 @@ export default defineConfig([
   {
     ignores: [
       "prettier.config.js",
+      "src/routeTree.gen.ts",
       ".tanstack",
       ".vscode",
       "node_modules",
