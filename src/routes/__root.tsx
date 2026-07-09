@@ -4,6 +4,7 @@ import { TanStackDevtools } from "@tanstack/react-devtools";
 
 import appCss from "../styles.css?url";
 import { ThemeProvider } from "@/components/theme-provider";
+import { NotFound } from "@/components/not-found";
 import { TooltipProvider } from "#/components/ui/tooltip";
 
 export const Route = createRootRoute({
@@ -27,6 +28,7 @@ export const Route = createRootRoute({
       },
     ],
   }),
+  notFoundComponent: () => <NotFound />,
   shellComponent: RootDocument,
 });
 
