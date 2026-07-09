@@ -40,6 +40,7 @@ export default defineConfig([
       "commitlint.config.js",
       "worker-configuration.d.ts",
       "src/components/ui/**/*.tsx",
+      "src/hooks/use-mobile.ts",
       "src/routeTree.gen.ts",
       ".tanstack",
       ".vscode",
