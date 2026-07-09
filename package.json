@@ -6,9 +6,9 @@
     "#/*": "./src/*"
   },
   "scripts": {
-    "dev": "vite dev --port 3000",
+    "dev": "pnpm run cf-typegen && vite dev --port 3000",
     "generate-routes": "tsr generate",
-    "build": "vite build",
+    "build": "pnpm run cf-typegen && vite build",
     "preview": "pnpm run build && vite preview",
     "test": "vitest run",
     "deploy": "pnpm run build && wrangler deploy",
