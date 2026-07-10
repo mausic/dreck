@@ -6,6 +6,7 @@ import appCss from "../styles.css?url";
 import { ThemeProvider } from "@/components/theme-provider";
 import { NotFound } from "@/components/not-found";
 import { TooltipProvider } from "#/components/ui/tooltip";
+import { Toaster } from "@/components/ui/sonner";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -41,6 +42,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       <body>
         <ThemeProvider>
           <TooltipProvider>{children}</TooltipProvider>
+          <Toaster position="top-right" />
         </ThemeProvider>
         <TanStackDevtools
           config={{
