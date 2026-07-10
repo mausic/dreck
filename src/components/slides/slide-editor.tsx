@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import type { IRect, ISelectionRect, ISlide, ITokens } from "@/lib/slides";
-import { applyEdit, applyPatch, elementsInRect } from "@/lib/slides";
+import { applyPatch, elementsInRect, toLines } from "@/lib/slides";
+import { editRegion } from "@/lib/ai/edit-region";
 import { SlidePreview } from "@/components/slides/slide-preview";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +26,7 @@ export interface ISlideEditorProps {
 export function SlideEditor({ slide, tokens, onChange }: ISlideEditorProps) {
   const [selection, setSelection] = useState<ISelectionRect | null>(null);
   const [instruction, setInstruction] = useState("");
+  const [pending, setPending] = useState(false);
 
   // Hit-test is derived, never stored: single source of truth is the canonical rect.
   const selectedElements = useMemo(
@@ -42,13 +45,47 @@ export function SlideEditor({ slide, tokens, onChange }: ISlideEditorProps) {
   }
 
   /** Whether the current selection + instruction permit an edit. */
-  const canApply = selectedElements.length > 0 && instruction.trim().length > 0;
+  const canApply =
+    selectedElements.length > 0 && instruction.trim().length > 0 && !pending;
 
-  /** Run the edit loop for the current selection + instruction, then persist the result. */
-  function handleApply() {
+  /**
+   * Run the edit loop: the `editRegion` server function performs the model call and
+   * returns a patch; `applyPatch` merges it (only the selected ids, immutably). A soft
+   * failure leaves the deck untouched and surfaces a toast — never a crash.
+   */
+  async function handleApply() {
     if (!canApply) return;
-    // Seam: applyEdit is the mock/LLM boundary; applyPatch is the pure isolated merge.
-    onChange(applyPatch(slide, applyEdit(selectedElements, instruction)));
+    setPending(true);
+    try {
+      const result = await editRegion({
+        data: {
+          instruction: instruction.trim(),
+          // The editable targets — exactly the hit-tested selection.
+          targets: selectedElements.map((el) => ({
+            id: el.id,
+            role: el.role,
+            content: el.content,
+          })),
+          // Read-only sibling text, for coherence (never edited).
+          context: slide.elements
+            .filter((el) => !selectedIds.has(el.id))
+            .flatMap((el) => toLines(el.content)),
+          tokens,
+        },
+      });
+      if (result.ok) {
+        onChange(applyPatch(slide, result.patch));
+      } else {
+        toast.error("Edit not applied", { description: result.error });
+      }
+    } catch {
+      toast.error("Edit not applied", {
+        description:
+          "Couldn't reach the editor. Check your connection and try again.",
+      });
+    } finally {
+      setPending(false);
+    }
   }
 
   /** Drop the current selection (and thus the highlight + marquee). */
@@ -78,18 +115,19 @@ export function SlideEditor({ slide, tokens, onChange }: ISlideEditorProps) {
             onKeyDown={(e) => {
               if (e.key === "Enter") handleApply();
             }}
-            placeholder='Edit instruction — e.g. "make it upper" or anything else'
+            placeholder='Edit instruction — e.g. "make this more concise"'
             className="h-9 min-w-56 flex-1"
             aria-label="Edit instruction"
+            disabled={pending}
           />
           <Button size="lg" onClick={handleApply} disabled={!canApply}>
-            Apply
+            {pending ? "Applying…" : "Apply"}
           </Button>
           <Button
             size="lg"
             variant="outline"
             onClick={handleClear}
-            disabled={!selection}
+            disabled={!selection || pending}
           >
             Clear
           </Button>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ISlide, ISlideElement } from "@/lib/slides/types";
-import { applyEdit, applyPatch } from "@/lib/slides/edit";
+import { applyPatch, patchFromUpdates } from "@/lib/slides/edit";
 
 /** Build an element with the given id + content; geometry/role/style are irrelevant here. */
 function el(id: string, content: ISlideElement["content"]): ISlideElement {
@@ -30,46 +30,59 @@ function slide(): ISlide {
   };
 }
 
-describe("applyEdit (mock transform)", () => {
-  it("appends ' (edited)' by default", () => {
-    const patch = applyEdit([el("target", "hello")], "make it pop");
-    expect(patch.target.content).toBe("hello (edited)");
-  });
-
-  it("uppercases when the instruction mentions 'upper'", () => {
-    const patch = applyEdit([el("target", "hello")], "UPPERcase this please");
-    expect(patch.target.content).toBe("HELLO");
-  });
-
-  it("transforms each structured content shape", () => {
-    const patch = applyEdit(
-      [
-        el("row", { label: "Dose", value: "120 mg" }),
-        el("panel", { heading: "Note", body: "body text" }),
-        el("lines", ["one", "two"]),
-      ],
-      "upper",
+describe("patchFromUpdates (structural constraints)", () => {
+  it("writes content only — never geometry, role or styleRef", () => {
+    const patch = patchFromUpdates(
+      [{ elementId: "target", content: "new copy" }],
+      new Set(["target"]),
     );
-    expect(patch.row.content).toEqual({ label: "DOSE", value: "120 MG" });
-    expect(patch.panel.content).toEqual({ heading: "NOTE", body: "BODY TEXT" });
-    expect(patch.lines.content).toEqual(["ONE", "TWO"]);
+    expect(patch.target).toEqual({ content: "new copy" });
+    expect(Object.keys(patch.target)).toEqual(["content"]);
+  });
+
+  it("drops updates aimed at a non-selected id", () => {
+    const patch = patchFromUpdates(
+      [
+        { elementId: "target", content: "ok" },
+        { elementId: "not-selected", content: "should be ignored" },
+      ],
+      new Set(["target"]),
+    );
+    expect(Object.keys(patch)).toEqual(["target"]);
+  });
+
+  it("carries structured content shapes through unchanged", () => {
+    const patch = patchFromUpdates(
+      [
+        { elementId: "row", content: { label: "Dose", value: "120 mg" } },
+        { elementId: "panel", content: { heading: "Note", body: "text" } },
+        { elementId: "lines", content: ["one", "two"] },
+      ],
+      new Set(["row", "panel", "lines"]),
+    );
+    expect(patch.row.content).toEqual({ label: "Dose", value: "120 mg" });
+    expect(patch.panel.content).toEqual({ heading: "Note", body: "text" });
+    expect(patch.lines.content).toEqual(["one", "two"]);
   });
 });
 
 describe("applyPatch (immutable, isolated apply)", () => {
   it("changes only the patched element and preserves identity of the rest", () => {
     const before = slide();
-    const selected = [before.elements[1]]; // "target"
-    const next = applyPatch(before, applyEdit(selected, "edit"));
+    const patch = patchFromUpdates(
+      [{ elementId: "target", content: "edited copy" }],
+      new Set(["target"]),
+    );
+    const next = applyPatch(before, patch);
 
     // A new slide + new elements array — the originals are not mutated.
     expect(next).not.toBe(before);
     expect(next.elements).not.toBe(before.elements);
 
-    // The targeted element is a NEW object with transformed content.
+    // The targeted element is a NEW object with the patched content.
     const nextTarget = next.elements.find((e) => e.id === "target")!;
     expect(nextTarget).not.toBe(before.elements[1]);
-    expect(nextTarget.content).toBe("edit me (edited)");
+    expect(nextTarget.content).toBe("edited copy");
 
     // THE ISOLATION ASSERTION: every non-selected element is the SAME reference.
     expect(next.elements[0]).toBe(before.elements[0]);
