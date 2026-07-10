@@ -24,7 +24,7 @@
     "required": [
       "GOOGLE_GENERATIVE_AI_API_KEY",
       "MISTRAL_API_KEY",
-      "NEON_CONNECTION_STRING",
+      "DATABASE_URL",
     ],
   },
   /**
