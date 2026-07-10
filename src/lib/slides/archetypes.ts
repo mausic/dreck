@@ -152,7 +152,7 @@ export const ARCHETYPES = {
   [tableSidebarArchetype.id]: tableSidebarArchetype,
 } satisfies Partial<Record<IArchetype["id"], IArchetype>>;
 
-/** Look up an archetype by id. */
-export function getArchetype(id: keyof typeof ARCHETYPES): IArchetype {
+/** Look up an archetype by id. Ids are free-form strings; callers pass known ones. */
+export function getArchetype(id: string): IArchetype {
   return ARCHETYPES[id];
 }

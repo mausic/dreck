@@ -14,7 +14,11 @@
 /** The canonical slide space. Every x/y/w/h below is expressed in these units. */
 export const CANVAS = { width: 1440, height: 810 } as const;
 
-/** Every role a slot/element can play. Drives how content is rendered. */
+/**
+ * A role a slot/element plays. The named members aid styling and hit-testing;
+ * `custom` is the open catch-all so a role emitted by design-system extraction
+ * (which reads arbitrary design PDFs) still types and renders sensibly.
+ */
 export type TSlotRole =
   | "logo"
   | "eyebrow"
@@ -25,11 +29,15 @@ export type TSlotRole =
   | "block"
   | "tableRow"
   | "panel"
-  | "footer";
+  | "footer"
+  | "custom";
 
-/** Identifiers for the reusable layout skeletons. */
-export type TArchetypeId =
-  "title" | "card-grid" | "two-column" | "table-sidebar";
+/**
+ * A layout skeleton's name/label — free-form, not an enum. Extraction reads
+ * arbitrary design PDFs and may produce archetype names we can't enumerate ahead
+ * of time, so this stays an open string.
+ */
+export type TArchetypeId = string;
 
 /** How an element arranges its own children, when it has any. */
 export type TSlotLayout = "stack" | "grid" | "centered";

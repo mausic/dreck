@@ -114,6 +114,9 @@ function ElementContent({ element }: { element: ISlideElement }) {
       // Pure colored region (backgrounds, rules) — all visual weight is in the preset.
       return null;
     default:
+      // All text roles plus `custom` / any unknown role from extraction: render as
+      // plain text. Unknown styleRefs resolve to no preset, so the box inherits the
+      // stage's body font + dark text tokens — a sensible default, never a crash.
       return <TextContent content={element.content} />;
   }
 }
