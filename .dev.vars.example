@@ -1,0 +1,8 @@
+# Local secrets for `wrangler`/Vite dev. Copy to `.dev.vars` (gitignored) and fill in.
+# In production set these as Worker secrets: `wrangler secret put GOOGLE_GENERATIVE_AI_API_KEY`.
+
+# Provider API key for the region-edit model call (server-side only, never shipped to the client).
+GOOGLE_GENERATIVE_AI_API_KEY=
+
+# Optional: override the fast edit model (defaults to `gemini-2.5-flash`, mirrors wrangler.jsonc `vars`).
+# EDIT_MODEL=gemini-2.5-flash
