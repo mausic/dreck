@@ -35,23 +35,26 @@ export function SlideEditor({ slide, tokens, onChange }: ISlideEditorProps) {
     [selectedElements],
   );
 
+  /** Store the drawn canonical rect as the active selection (`null` clears it). */
   function handleSelectRect(rect: IRect | null) {
     // Attach the slideId here → the graded { slideId, x, y, width, height } shape.
     setSelection(rect ? { slideId: slide.id, ...rect } : null);
   }
 
+  /** Whether the current selection + instruction permit an edit. */
+  const canApply = selectedElements.length > 0 && instruction.trim().length > 0;
+
+  /** Run the edit loop for the current selection + instruction, then persist the result. */
   function handleApply() {
-    if (selectedElements.length === 0 || instruction.trim().length === 0)
-      return;
+    if (!canApply) return;
     // Seam: applyEdit is the mock/LLM boundary; applyPatch is the pure isolated merge.
     onChange(applyPatch(slide, applyEdit(selectedElements, instruction)));
   }
 
+  /** Drop the current selection (and thus the highlight + marquee). */
   function handleClear() {
     setSelection(null);
   }
-
-  const canApply = selectedElements.length > 0 && instruction.trim().length > 0;
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col gap-3">
