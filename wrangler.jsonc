@@ -21,7 +21,11 @@
     },
   ],
   "secrets": {
-    "required": ["GOOGLE_GENERATIVE_AI_API_KEY"],
+    "required": [
+      "GOOGLE_GENERATIVE_AI_API_KEY",
+      "MISTRAL_API_KEY",
+      "DATABASE_URL",
+    ],
   },
   /**
    * Smart Placement
