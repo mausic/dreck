@@ -6,3 +6,14 @@ GOOGLE_GENERATIVE_AI_API_KEY=
 
 # Optional: override the fast edit model (defaults to `gemini-2.5-flash`, mirrors wrangler.jsonc `vars`).
 # EDIT_MODEL=gemini-2.5-flash
+
+# Mistral key for the Document (OCR) API — PDF → table-aware markdown (server-side only).
+MISTRAL_API_KEY=
+
+# Optional: override the OCR model (defaults to `mistral-ocr-latest`).
+# MISTRAL_OCR_MODEL=mistral-ocr-latest
+
+# Postgres (Neon) connection string for Drizzle, over the Neon HTTP driver.
+# The Worker reads this at runtime; drizzle-kit (`pnpm db:push`) reads it from the shell
+# env / .env, not from this file — export it there too when pushing the schema.
+NEON_CONNECTION_STRING=postgresql://neondb_owner:...
