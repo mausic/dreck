@@ -1,6 +1,7 @@
 import { useState } from "react";
-import type { IDeck, ITokens } from "@/lib/slides";
+import type { IDeck, ISlide, ITokens } from "@/lib/slides";
 import { SlidePreview } from "@/components/slides/slide-preview";
+import { SlideEditor } from "@/components/slides/slide-editor";
 import { cn } from "@/lib/utils";
 
 export interface IDeckViewProps {
@@ -9,16 +10,27 @@ export interface IDeckViewProps {
 }
 
 /**
- * Minimal deck workspace: a thumbnail rail (each a small {@link SlidePreview}) beside
- * one large preview of the selected slide. The same preview component drives both,
- * proving the canonical→pixel scale generalizes across any container size.
+ * Deck workspace: a thumbnail rail (static {@link SlidePreview}s) beside the
+ * {@link SlideEditor} for the selected slide. The deck is held in state so region
+ * edits persist per slide as the user navigates; edits are applied immutably at the
+ * deck level (only the edited slide object is replaced).
  */
-export function DeckView({ deck, tokens }: IDeckViewProps) {
-  const [selectedId, setSelectedId] = useState(deck.slides[0]?.id ?? "");
+export function DeckView({ deck: initialDeck, tokens }: IDeckViewProps) {
+  const [deck, setDeck] = useState(initialDeck);
+  const [selectedId, setSelectedId] = useState(initialDeck.slides[0]?.id ?? "");
 
   if (deck.slides.length === 0) return null;
   const selected =
     deck.slides.find((slide) => slide.id === selectedId) ?? deck.slides[0];
+
+  function handleSlideChange(next: ISlide) {
+    setDeck((current) => ({
+      ...current,
+      slides: current.slides.map((slide) =>
+        slide.id === next.id ? next : slide,
+      ),
+    }));
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-1 gap-6">
@@ -51,11 +63,13 @@ export function DeckView({ deck, tokens }: IDeckViewProps) {
         })}
       </nav>
 
-      <div className="flex min-w-0 flex-1 items-center justify-center">
-        <div className="aspect-[16/9] w-full max-w-[1180px] overflow-hidden rounded-xl border bg-card shadow-sm">
-          <SlidePreview slide={selected} tokens={tokens} />
-        </div>
-      </div>
+      {/* Keyed by slide id so switching slides resets the editor's selection. */}
+      <SlideEditor
+        key={selected.id}
+        slide={selected}
+        tokens={tokens}
+        onChange={handleSlideChange}
+      />
     </div>
   );
 }
