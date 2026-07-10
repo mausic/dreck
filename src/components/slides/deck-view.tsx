@@ -23,6 +23,7 @@ export function DeckView({ deck: initialDeck, tokens }: IDeckViewProps) {
   const selected =
     deck.slides.find((slide) => slide.id === selectedId) ?? deck.slides[0];
 
+  /** Replace the edited slide in the working deck immutably; other slides keep identity. */
   function handleSlideChange(next: ISlide) {
     setDeck((current) => ({
       ...current,

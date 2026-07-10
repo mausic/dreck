@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ISlide, ISlideElement } from "@/lib/slides/types";
 import { applyEdit, applyPatch } from "@/lib/slides/edit";
 
+/** Build an element with the given id + content; geometry/role/style are irrelevant here. */
 function el(id: string, content: ISlideElement["content"]): ISlideElement {
   return {
     id,
@@ -16,6 +17,7 @@ function el(id: string, content: ISlideElement["content"]): ISlideElement {
   };
 }
 
+/** A 3-element fixture: two elements to leave untouched around one edit target. */
 function slide(): ISlide {
   return {
     id: "s1",

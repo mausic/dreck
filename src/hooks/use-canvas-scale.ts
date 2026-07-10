@@ -36,6 +36,7 @@ export function useCanvasScale<T extends HTMLElement>(): IUseCanvasScale<T> {
     const el = ref.current;
     if (!el) return;
 
+    // Re-measure the container and recompute the uniform fit scale.
     const measure = () => {
       const { width, height } = el.getBoundingClientRect();
       // Fit within both axes (letterbox-safe). When height is unconstrained the
