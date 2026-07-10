@@ -14,7 +14,8 @@
     "deploy": "pnpm run build && wrangler deploy",
     "cf-typegen": "wrangler types",
     "format": "prettier --write .",
-    "lint": "eslint \"src/**/*.{ts,tsx}\" --fix",
+    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "lint:fix": "pnpm run lint --fix",
     "prepare": "husky"
   },
   "dependencies": {
