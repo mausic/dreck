@@ -12,6 +12,19 @@
     "enabled": true,
   },
   "upload_source_maps": true,
+  "workers_dev": false,
+  "preview_urls": true,
+  "routes": [
+    {
+      "pattern": "dreck.ryndia.me",
+      "custom_domain": true,
+      "enabled": true,
+      "previews_enabled": true,
+    },
+  ],
+  "secrets": {
+    "required": ["GOOGLE_GENERATIVE_AI_API_KEY"],
+  },
   /**
    * Smart Placement
    * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
