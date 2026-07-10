@@ -1,37 +1,11 @@
 import type { CSSProperties } from "react";
-import type {
-  ILabelValue,
-  IPanelContent,
-  ISlideElement,
-  TSlotContent,
+import type { ISlideElement, TSlotContent } from "@/lib/slides";
+import {
+  isLabelValue,
+  isPanelContent,
+  resolveStyle,
+  toLines,
 } from "@/lib/slides";
-import { resolveStyle } from "@/lib/slides";
-
-// — Narrowing helpers for the structured content shapes (never trust `Record`) —
-
-function isLabelValue(content: TSlotContent): content is ILabelValue {
-  return (
-    typeof content === "object" &&
-    !Array.isArray(content) &&
-    typeof (content as Record<string, unknown>).label === "string" &&
-    typeof (content as Record<string, unknown>).value === "string"
-  );
-}
-
-function isPanelContent(content: TSlotContent): content is IPanelContent {
-  return (
-    typeof content === "object" &&
-    !Array.isArray(content) &&
-    typeof (content as Record<string, unknown>).heading === "string" &&
-    typeof (content as Record<string, unknown>).body === "string"
-  );
-}
-
-function toLines(content: TSlotContent): Array<string> {
-  if (typeof content === "string") return content.length > 0 ? [content] : [];
-  if (Array.isArray(content)) return content;
-  return [];
-}
 
 /** Label (left) + right-aligned bold value — a single `tableRow`. */
 function TableRow({ content }: { content: TSlotContent }) {
@@ -125,8 +99,18 @@ function ElementContent({ element }: { element: ISlideElement }) {
  * Renders a single slide element as an absolutely-positioned box at its CANONICAL
  * {x,y,w,h}. Because the parent stage is sized 1440×810 and scaled as a whole, these
  * canonical numbers are used directly as pixels here — no per-element scaling.
+ *
+ * When `selected`, an outline ring marks it as hit by the current selection rectangle.
+ * The ring is drawn in canonical px (like everything else on the stage) so it scales
+ * with the preview; `outline` sits outside the box and is not clipped by `overflow`.
  */
-export function SlideElementView({ element }: { element: ISlideElement }) {
+export function SlideElementView({
+  element,
+  selected = false,
+}: {
+  element: ISlideElement;
+  selected?: boolean;
+}) {
   const style: CSSProperties = {
     position: "absolute",
     left: element.x,
@@ -135,9 +119,24 @@ export function SlideElementView({ element }: { element: ISlideElement }) {
     height: element.h,
     overflow: "hidden",
     ...resolveStyle(element.styleRef),
+    ...(selected
+      ? {
+          outline: "3px solid var(--slide-selection, #2563eb)",
+          outlineOffset: "-1px",
+          // Large inset spread = a flat translucent fill, clipped to THIS element
+          // (below its content), so multi-select tints each box without stacking.
+          boxShadow:
+            "inset 0 0 0 9999px color-mix(in srgb, #2563eb 14%, transparent)",
+        }
+      : null),
   };
   return (
-    <div data-role={element.role} data-element-id={element.id} style={style}>
+    <div
+      data-role={element.role}
+      data-element-id={element.id}
+      data-selected={selected || undefined}
+      style={style}
+    >
       <ElementContent element={element} />
     </div>
   );
