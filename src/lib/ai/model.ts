@@ -13,6 +13,9 @@ import type { LanguageModel } from "ai";
 /** Fast model on the hot path (edits are latency-sensitive); override with `EDIT_MODEL`. */
 const DEFAULT_EDIT_MODEL = "gemini-2.5-flash";
 
+/** Fast model for generation (planning + fill) too — speed-to-deck is a KPI. Override with `GENERATE_MODEL`. */
+const DEFAULT_GENERATE_MODEL = "gemini-2.5-flash";
+
 /** Thrown when the provider key is absent; the server function turns it into a soft error. */
 export class MissingApiKeyError extends Error {
   constructor() {
@@ -27,5 +30,14 @@ export function getEditModel(): LanguageModel {
   if (!apiKey) throw new MissingApiKeyError();
 
   const modelId = process.env.EDIT_MODEL ?? DEFAULT_EDIT_MODEL;
+  return createGoogleGenerativeAI({ apiKey })(modelId);
+}
+
+/** Build the generation model from env (`GOOGLE_GENERATIVE_AI_API_KEY`, `GENERATE_MODEL`). */
+export function getGenerateModel(): LanguageModel {
+  const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+  if (!apiKey) throw new MissingApiKeyError();
+
+  const modelId = process.env.GENERATE_MODEL ?? DEFAULT_GENERATE_MODEL;
   return createGoogleGenerativeAI({ apiKey })(modelId);
 }
