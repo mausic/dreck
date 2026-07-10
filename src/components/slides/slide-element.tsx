@@ -52,7 +52,7 @@ function TableRow({ content }: { content: TSlotContent }) {
         style={{
           fontFamily: "var(--slide-font-display)",
           fontWeight: 700,
-          color: "var(--slide-navy)",
+          color: "var(--slide-primary)",
           textAlign: "right",
         }}
       >
@@ -62,7 +62,7 @@ function TableRow({ content }: { content: TSlotContent }) {
   );
 }
 
-/** Navy callout: heading + body. Styling of the box comes from the element preset. */
+/** Primary-colored callout: heading + body. Box styling comes from the element preset. */
 function PanelBlock({ content }: { content: TSlotContent }) {
   if (!isPanelContent(content)) return null;
   return (

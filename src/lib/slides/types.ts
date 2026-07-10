@@ -52,8 +52,8 @@ export type TStyleRef = string;
 /** Design tokens approximating a corporate pharma design system. */
 export interface ITokens {
   colors: {
-    navy: string;
-    panel: string;
+    primary: string;
+    surface: string;
     accent: string;
     white: string;
     textDark: string;

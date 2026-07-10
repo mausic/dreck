@@ -24,9 +24,9 @@ export const STYLE_REF = {
 } as const;
 
 const STYLE_PRESETS: Record<string, CSSProperties> = {
-  // — Title archetype (light text on a full-bleed navy stage) —
+  // — Title archetype (light text on a full-bleed primary stage) —
   [STYLE_REF.titleBg]: {
-    background: "var(--slide-navy)",
+    background: "var(--slide-primary)",
   },
   [STYLE_REF.titleLogo]: {
     display: "flex",
@@ -45,7 +45,7 @@ const STYLE_PRESETS: Record<string, CSSProperties> = {
     fontSize: 22,
     letterSpacing: "0.32em",
     textTransform: "uppercase",
-    color: "color-mix(in srgb, var(--slide-accent), white 48%)",
+    color: "color-mix(in srgb, var(--slide-accent), var(--slide-white) 48%)",
   },
   [STYLE_REF.titleTitle]: {
     display: "flex",
@@ -79,7 +79,7 @@ const STYLE_PRESETS: Record<string, CSSProperties> = {
     opacity: 0.55,
   },
 
-  // — Table + sidebar archetype (dark text on the white stage + navy callout) —
+  // — Table + sidebar archetype (dark text on the white stage + primary callout) —
   [STYLE_REF.sidebarEyebrow]: {
     display: "flex",
     alignItems: "center",
@@ -98,7 +98,7 @@ const STYLE_PRESETS: Record<string, CSSProperties> = {
     fontSize: 56,
     lineHeight: 1.05,
     letterSpacing: "-0.015em",
-    color: "var(--slide-navy)",
+    color: "var(--slide-primary)",
   },
   [STYLE_REF.sidebarRow]: {
     display: "flex",
@@ -107,10 +107,10 @@ const STYLE_PRESETS: Record<string, CSSProperties> = {
     fontSize: 25,
     color: "var(--slide-text-dark)",
     borderBottom:
-      "1px solid color-mix(in srgb, var(--slide-text-muted), white 60%)",
+      "1px solid color-mix(in srgb, var(--slide-text-muted), var(--slide-white) 60%)",
   },
   [STYLE_REF.sidebarPanel]: {
-    background: "var(--slide-navy)",
+    background: "var(--slide-primary)",
     borderRadius: 18,
     padding: "44px 46px",
     color: "var(--slide-white)",

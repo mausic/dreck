@@ -24,8 +24,8 @@ export function SlidePreview({ slide, tokens, className }: ISlidePreviewProps) {
   const { ref, scale, rendered, ready } = useCanvasScale<HTMLDivElement>();
 
   const tokenVars = {
-    "--slide-navy": tokens.colors.navy,
-    "--slide-panel": tokens.colors.panel,
+    "--slide-primary": tokens.colors.primary,
+    "--slide-surface": tokens.colors.surface,
     "--slide-accent": tokens.colors.accent,
     "--slide-white": tokens.colors.white,
     "--slide-text-dark": tokens.colors.textDark,

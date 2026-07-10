@@ -11,9 +11,9 @@ import type { ITokens } from "@/lib/slides/types";
  */
 export const PHARMA_TOKENS: ITokens = {
   colors: {
-    navy: "#0d3b5c", // deep corporate navy — title bg + callout panels
-    panel: "#f4f7f9", // light-grey surface panel
-    accent: "#1a6bb5", // accent blue — eyebrows, rules, figures
+    primary: "#0d3b5c", // brand primary — title bg + callout panels (approx. deep navy)
+    surface: "#f4f7f9", // light surface (approx. light grey)
+    accent: "#1a6bb5", // accent — eyebrows, rules, figures (approx. blue)
     white: "#ffffff",
     textDark: "#132430", // near-black body text
     textMuted: "#5b7385", // muted grey — footers, captions
