@@ -94,11 +94,13 @@ export function SlidePreview({
   // — Pointer handlers (only wired when interactive). All px↔canonical math is
   //   delegated to previewRectToCanonical; nothing here scales coordinates itself. —
 
+  /** Pointer position relative to the preview container's top-left, in CSS px. */
   function localPoint(event: PointerEvent<HTMLDivElement>) {
     const rect = event.currentTarget.getBoundingClientRect();
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   }
 
+  /** Begin a drag: capture the pointer and record the start corner. */
   function handlePointerDown(event: PointerEvent<HTMLDivElement>) {
     if (!interactive || scale <= 0) return;
     // Capture keeps move/up firing if the pointer leaves the box mid-drag. It can throw
@@ -112,12 +114,14 @@ export function SlidePreview({
     setDrag({ sx: p.x, sy: p.y, cx: p.x, cy: p.y });
   }
 
+  /** Track the moving corner while a drag is in progress. */
   function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
     if (!drag) return;
     const p = localPoint(event);
     setDrag((d) => (d ? { ...d, cx: p.x, cy: p.y } : d));
   }
 
+  /** End a drag: map the drawn box to canonical units, or clear on a click/tiny drag. */
   function handlePointerUp(event: PointerEvent<HTMLDivElement>) {
     if (!drag) return;
     const rect = event.currentTarget.getBoundingClientRect();

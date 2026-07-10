@@ -78,6 +78,7 @@ function TextContent({ content }: { content: TSlotContent }) {
   );
 }
 
+/** Route a filled element to the content renderer for its role (block renders nothing). */
 function ElementContent({ element }: { element: ISlideElement }) {
   switch (element.role) {
     case "tableRow":
