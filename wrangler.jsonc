@@ -14,14 +14,19 @@
   "upload_source_maps": true,
   // "workers_dev": false,
   "preview_urls": true,
-  "routes": [
-    {
-      "pattern": "dreck.ryndia.me",
-      "custom_domain": true,
-      "enabled": true,
-      "previews_enabled": true,
-    },
-  ],
+  // Custom domain temporarily disabled. Attaching dreck.ryndia.me via CI failed at the
+  // Cloudflare API (/workers/scripts/dreck/domains/records): the `ryndia.me` zone must be
+  // active in this account AND the Workers Builds token needs Zone -> DNS -> Edit on it.
+  // Wire the domain in the dashboard (Worker -> Settings -> Domains & Routes), or restore
+  // this block once the zone + token permissions are in place.
+  // "routes": [
+  //   {
+  //     "pattern": "dreck.ryndia.me",
+  //     "custom_domain": true,
+  //     "enabled": true,
+  //     "previews_enabled": true,
+  //   },
+  // ],
   "secrets": {
     "required": ["GOOGLE_GENERATIVE_AI_API_KEY"],
   },
