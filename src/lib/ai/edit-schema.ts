@@ -18,7 +18,14 @@
  * `applyPatch` already consumes — the tag never escapes this module.
  */
 import { z } from "zod";
-import type { ILabelValue, IPanelContent, ITokens } from "@/lib/slides/types";
+import type { ITokens } from "@/lib/slides/types";
+import type { TWireContent } from "@/lib/ai/content-patch";
+import { toSlotContent, zContentPatch } from "@/lib/ai/content-patch";
+
+// The tagged content union + its collapse helper now live in `content-patch.ts` (shared
+// with generation). Re-exported here so existing importers (`edit-region.ts`) are unchanged.
+export { toSlotContent, zContentPatch };
+export type { TContentPatch, TWireContent } from "@/lib/ai/content-patch";
 
 /**
  * The native content shapes, used for the INPUT targets (Zod only parses these — the
@@ -73,31 +80,6 @@ export const EditRegionInputSchema = z.object({
 export type TEditRegionInput = z.input<typeof EditRegionInputSchema>;
 export type TEditRegionData = z.output<typeof EditRegionInputSchema>;
 
-/**
- * Model OUTPUT content: an all-object discriminated union keyed by `kind`. Each member
- * maps 1:1 to a native {@link TSlotContent} shape via {@link toSlotContent}.
- */
-export const zContentPatch = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("text"), text: z.string() }),
-  z.object({ kind: z.literal("lines"), lines: z.array(z.string()) }),
-  z.object({
-    kind: z.literal("labelValue"),
-    label: z.string(),
-    value: z.string(),
-  }),
-  z.object({ kind: z.literal("panel"), heading: z.string(), body: z.string() }),
-]);
-
-export type TContentPatch = z.infer<typeof zContentPatch>;
-
-/**
- * The concrete content shapes that cross the wire back to the client — the four native
- * shapes `toSlotContent` can produce, deliberately WITHOUT `TSlotContent`'s open
- * `Record<string, unknown>` member (which isn't provably serializable by the server-fn
- * type-check). This is a subset of `TSlotContent`, so it flows straight into `applyPatch`.
- */
-export type TWireContent = string | Array<string> | ILabelValue | IPanelContent;
-
 /** The patch shape returned by `editRegion`: content-only, keyed by selected element id. */
 export type TWirePatch = Record<string, { content: TWireContent }>;
 
@@ -113,20 +95,6 @@ export const EditPatchSchema = z.object({
 });
 
 export type TEditPatchResult = z.infer<typeof EditPatchSchema>;
-
-/** Collapse a tagged content patch back to a native, serializable content shape. */
-export function toSlotContent(content: TContentPatch): TWireContent {
-  switch (content.kind) {
-    case "text":
-      return content.text;
-    case "lines":
-      return content.lines;
-    case "labelValue":
-      return { label: content.label, value: content.value };
-    case "panel":
-      return { heading: content.heading, body: content.body };
-  }
-}
 
 /**
  * The server function's result. A discriminated result (never a throw) so the client can
