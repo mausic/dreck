@@ -13,6 +13,7 @@ import type { ISection } from "@/lib/extract/section";
 import type { IArchetype, ISlot, ITokens, TSlotRole } from "@/lib/slides/types";
 import type { IGroundingIssue } from "@/lib/ai/generate-schema";
 import type { TDocOverview } from "@/lib/ai/sections";
+import { slotCharBudget } from "@/lib/ai/fit";
 
 /** Bump when wording below changes materially, so runs stay attributable. */
 export const PLAN_PROMPT_VERSION = "plan/v1";
@@ -90,7 +91,7 @@ Rules:
   • labelValue → { "kind": "labelValue", "label": "...", "value": "..." }  (a table row)
   • panel → { "kind": "panel", "heading": "...", "body": "..." }
 - Ground every FACT in the provided source content. Do NOT invent, and never emit numbers, doses, units, weight bands, product names, or DINs that do not appear verbatim in the source. If a figure isn't in the source, leave it out — write around it. Your own prior knowledge is not a source.
-- Fit the slot: keep copy short enough for the size hint (titles a few words; table values a single figure; panel bodies one or two sentences). Match the deck's professional, clinical tone.
+- STAY WITHIN THE CHARACTER BUDGET stated for each slot — the text is clipped if it overruns its box. Treat the budget as a hard limit: prefer fewer words, drop adjectives, and never pad. Match the deck's professional, clinical tone.
 - Content only. You do not control geometry, colors, roles, or layout — those come from the archetype.
 
 Respond with { "slots": [{ "slotId", "content" }, ...] } covering the listed slots.`;
@@ -109,7 +110,7 @@ export function buildFillPrompt(args: {
       (slot) =>
         `- slotId: ${slot.id} | role: ${slot.role} | kind: ${expectedKind(
           slot.role,
-        )} | size ~${slot.w}×${slot.h}px`,
+        )} | ${slotCharBudget(slot)}`,
     )
     .join("\n");
 

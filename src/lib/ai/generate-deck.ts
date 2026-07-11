@@ -31,6 +31,7 @@ import { fallbackPlan, planDeck } from "@/lib/ai/plan";
 import { pickArchetype } from "@/lib/ai/pick-archetype";
 import { fillSlide } from "@/lib/ai/fill";
 import { verifySlideGrounding } from "@/lib/ai/grounding";
+import { describeFitIssues, verifySlideFit } from "@/lib/ai/fit";
 import { selectSections, summarizeSections } from "@/lib/ai/sections";
 import { describeGroundingIssues } from "@/lib/ai/generate-prompt";
 import { fatalProviderMessage, isFatalProviderError } from "@/lib/ai/retry";
@@ -101,10 +102,29 @@ async function persistSlide(
   });
 }
 
+/** Compose the retry note from whichever checks failed — ungrounded figures and/or overflow. */
+function retryNote(
+  grounding: IGroundingReport,
+  fit: ReturnType<typeof verifySlideFit>,
+): string {
+  const parts: Array<string> = [];
+  if (!grounding.ok) {
+    parts.push(
+      `These values are NOT in the source — remove or correct them: ${describeGroundingIssues(grounding.issues)}.`,
+    );
+  }
+  if (!fit.ok) {
+    parts.push(
+      `These slots overflow their box — make them shorter: ${describeFitIssues(fit.issues)}.`,
+    );
+  }
+  return parts.join(" ");
+}
+
 /**
- * The per-slide pipeline core: fill → verify → (retry once if ungrounded) → verify. The slide is
- * kept either way; if it's still ungrounded after the retry budget it ships flagged, never dropped
- * and never looped.
+ * The per-slide pipeline core: fill → verify (grounding + fit) → (regenerate once if either
+ * fails) → verify. The slide is kept either way; if it still fails after the retry budget it
+ * ships as-is (grounding flagged, overflow clipped) — never dropped, never looped.
  */
 async function buildOneSlide(args: {
   slideId: string;
@@ -125,17 +145,19 @@ async function buildOneSlide(args: {
 
   let slide = await fillSlide(base);
   let grounding = verifySlideGrounding(slide, args.markdown);
+  let fit = verifySlideFit(slide);
 
   for (
     let attempt = 0;
-    attempt < MAX_FILL_RETRIES && !grounding.ok;
+    attempt < MAX_FILL_RETRIES && (!grounding.ok || !fit.ok);
     attempt++
   ) {
     slide = await fillSlide({
       ...base,
-      failureNote: describeGroundingIssues(grounding.issues),
+      failureNote: retryNote(grounding, fit),
     });
     grounding = verifySlideGrounding(slide, args.markdown);
+    fit = verifySlideFit(slide);
   }
 
   return { slide, grounding };
