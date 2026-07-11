@@ -21,6 +21,7 @@ import { SlideFillSchema } from "@/lib/ai/generate-schema";
 import { toSlotContent } from "@/lib/ai/content-patch";
 import { FILL_SYSTEM_PROMPT, buildFillPrompt } from "@/lib/ai/generate-prompt";
 import { getGenerateModel } from "@/lib/ai/model";
+import { withModelRetry } from "@/lib/ai/retry";
 
 export interface IFillSlideArgs {
   /** Stable slide id; element ids are derived from it (`${slideId}--${slotId}`). */
@@ -64,33 +65,35 @@ export function assembleSlide(
 
 /** Run the streamed fill for one slide and assemble the flat slide model. */
 export async function fillSlide(args: IFillSlideArgs): Promise<IWireSlide> {
-  const result = streamObject({
-    model: getGenerateModel(),
-    schema: SlideFillSchema,
-    system: FILL_SYSTEM_PROMPT,
-    prompt: buildFillPrompt({
-      intent: args.intent,
-      title: args.title,
-      archetype: args.archetype,
-      sections: args.sections,
-      tokens: args.tokens,
-      failureNote: args.failureNote,
-    }),
-    // No SDK-level retry on this interactive hot path: a rate-limit (429) carries a long
-    // provider Retry-After (tens of seconds), so an automatic retry would make a throttled
-    // request appear to hang. Fail fast instead; the pipeline's own grounding retry re-runs
-    // the whole slide once when needed.
-    maxRetries: 0,
+  // Class-aware retry (see retry.ts): quick backoffs for a transient 503/overload, no wait on a
+  // rate-limit wall. SDK-level retry is off so it never does the provider's long 429 Retry-After.
+  // The thunk re-creates the request each attempt — a consumed stream can't be replayed.
+  const fill = await withModelRetry(async () => {
+    const result = streamObject({
+      model: getGenerateModel(),
+      schema: SlideFillSchema,
+      system: FILL_SYSTEM_PROMPT,
+      prompt: buildFillPrompt({
+        intent: args.intent,
+        title: args.title,
+        archetype: args.archetype,
+        sections: args.sections,
+        tokens: args.tokens,
+        failureNote: args.failureNote,
+      }),
+      maxRetries: 0,
+    });
+
+    // streamObject is LAZY: its `object` promise is resolved from a stream flush that only runs
+    // once the output stream is actually pulled — nothing pumps it internally. So drain
+    // `partialObjectStream` to drive generation to completion (this is also where intra-slide
+    // progressive rendering would forward partials), THEN take the final validated object.
+    // Awaiting `object` without consuming a stream would hang forever.
+    for await (const partial of result.partialObjectStream) {
+      void partial;
+    }
+    return result.object;
   });
 
-  // streamObject is LAZY: its `object` promise is resolved from a stream flush that only runs
-  // once the output stream is actually pulled — nothing pumps it internally. So drain
-  // `partialObjectStream` to drive generation to completion (this is also where intra-slide
-  // progressive rendering would forward partials), THEN take the final validated object.
-  // Awaiting `object` without consuming a stream would hang forever.
-  for await (const partial of result.partialObjectStream) {
-    void partial;
-  }
-  const fill = await result.object;
   return assembleSlide(args.slideId, args.archetype, fill);
 }

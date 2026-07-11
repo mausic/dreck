@@ -15,6 +15,7 @@ import type { TDocOverview } from "@/lib/ai/sections";
 import { MAX_SLIDES, SlidePlanSchema } from "@/lib/ai/generate-schema";
 import { PLAN_SYSTEM_PROMPT, buildPlanPrompt } from "@/lib/ai/generate-prompt";
 import { getGenerateModel } from "@/lib/ai/model";
+import { withModelRetry } from "@/lib/ai/retry";
 
 /** Run the planner. Throws on a missing key / model / parse failure — the caller falls back. */
 export async function planDeck(
@@ -22,16 +23,18 @@ export async function planDeck(
   overview: TDocOverview,
   archetypeIds: Array<string>,
 ): Promise<TSlidePlan> {
-  const { object } = await generateObject({
-    model: getGenerateModel(),
-    schema: SlidePlanSchema,
-    system: PLAN_SYSTEM_PROMPT,
-    prompt: buildPlanPrompt(brief, overview, archetypeIds),
-    // Fail fast on the interactive hot path — see the note in `fill.ts`. The deterministic
-    // fallback plan covers a transient planner failure without an SDK-level retry.
-    maxRetries: 0,
-  });
-  return object;
+  // Class-aware retry (see retry.ts): quick backoff for a transient overload, none for a
+  // rate-limit wall. SDK-level retry is off so it never does the provider's long 429 wait.
+  const result = await withModelRetry(() =>
+    generateObject({
+      model: getGenerateModel(),
+      schema: SlidePlanSchema,
+      system: PLAN_SYSTEM_PROMPT,
+      prompt: buildPlanPrompt(brief, overview, archetypeIds),
+      maxRetries: 0,
+    }),
+  );
+  return result.object;
 }
 
 /**

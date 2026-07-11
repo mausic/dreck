@@ -33,6 +33,7 @@ import { fillSlide } from "@/lib/ai/fill";
 import { verifySlideGrounding } from "@/lib/ai/grounding";
 import { selectSections, summarizeSections } from "@/lib/ai/sections";
 import { describeGroundingIssues } from "@/lib/ai/generate-prompt";
+import { fatalProviderMessage, isFatalProviderError } from "@/lib/ai/retry";
 
 /** Retry budget for an ungrounded slide. Bounded — never loops unbounded (spec). */
 const MAX_FILL_RETRIES = 1;
@@ -41,38 +42,6 @@ type TDb = ReturnType<typeof getDb>;
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Generation failed.";
-}
-
-/** Text to test provider errors against (covers AI SDK wrappers like AI_RetryError). */
-function errorText(error: unknown): string {
-  return error instanceof Error
-    ? `${error.name} ${error.message}`
-    : String(error);
-}
-
-/**
- * A provider error that will affect EVERY slide the same way — a rate-limit/quota wall or a
- * bad/absent key. Detected so the orchestrator can abort once with a clear message instead of
- * grinding through every planned slide only to fail each identically.
- */
-function isFatalProviderError(error: unknown): boolean {
-  return /quota|rate.?limit|429|too many requests|resource_exhausted|unauthenticated|permission_denied|api[_ ]?key|401|403/i.test(
-    errorText(error),
-  );
-}
-
-/** A human-readable message for a fatal provider error, with the concrete way out. */
-function fatalProviderMessage(error: unknown): string {
-  const text = errorText(error);
-  if (
-    /quota|429|resource_exhausted|too many requests|rate.?limit/i.test(text)
-  ) {
-    return "The generation model's rate limit / daily quota was reached. Wait for it to reset, use an API key with higher limits, or point GENERATE_MODEL at a different model.";
-  }
-  if (/unauthenticated|permission_denied|api[_ ]?key|401|403/i.test(text)) {
-    return "The generation model rejected the API key. Check GOOGLE_GENERATIVE_AI_API_KEY.";
-  }
-  return errorMessage(error);
 }
 
 /** Load the content document's markdown + section tree by id (server-side only). */
