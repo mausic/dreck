@@ -64,7 +64,7 @@ export function assembleSlide(
 
 /** Run the streamed fill for one slide and assemble the flat slide model. */
 export async function fillSlide(args: IFillSlideArgs): Promise<IWireSlide> {
-  const { object } = streamObject({
+  const result = streamObject({
     model: getGenerateModel(),
     schema: SlideFillSchema,
     system: FILL_SYSTEM_PROMPT,
@@ -76,12 +76,21 @@ export async function fillSlide(args: IFillSlideArgs): Promise<IWireSlide> {
       tokens: args.tokens,
       failureNote: args.failureNote,
     }),
-    // One retry beyond the initial attempt for transient/parse failures.
-    maxRetries: 1,
+    // No SDK-level retry on this interactive hot path: a rate-limit (429) carries a long
+    // provider Retry-After (tens of seconds), so an automatic retry would make a throttled
+    // request appear to hang. Fail fast instead; the pipeline's own grounding retry re-runs
+    // the whole slide once when needed.
+    maxRetries: 0,
   });
 
-  // Await the final, validated object — the verify step needs the whole slide. (The stream is
-  // consumed internally; `partialObjectStream` is where intra-slide streaming would hook in.)
-  const fill = await object;
+  // streamObject is LAZY: its `object` promise is resolved from a stream flush that only runs
+  // once the output stream is actually pulled — nothing pumps it internally. So drain
+  // `partialObjectStream` to drive generation to completion (this is also where intra-slide
+  // progressive rendering would forward partials), THEN take the final validated object.
+  // Awaiting `object` without consuming a stream would hang forever.
+  for await (const partial of result.partialObjectStream) {
+    void partial;
+  }
+  const fill = await result.object;
   return assembleSlide(args.slideId, args.archetype, fill);
 }

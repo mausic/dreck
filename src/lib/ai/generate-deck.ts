@@ -43,6 +43,38 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Generation failed.";
 }
 
+/** Text to test provider errors against (covers AI SDK wrappers like AI_RetryError). */
+function errorText(error: unknown): string {
+  return error instanceof Error
+    ? `${error.name} ${error.message}`
+    : String(error);
+}
+
+/**
+ * A provider error that will affect EVERY slide the same way — a rate-limit/quota wall or a
+ * bad/absent key. Detected so the orchestrator can abort once with a clear message instead of
+ * grinding through every planned slide only to fail each identically.
+ */
+function isFatalProviderError(error: unknown): boolean {
+  return /quota|rate.?limit|429|too many requests|resource_exhausted|unauthenticated|permission_denied|api[_ ]?key|401|403/i.test(
+    errorText(error),
+  );
+}
+
+/** A human-readable message for a fatal provider error, with the concrete way out. */
+function fatalProviderMessage(error: unknown): string {
+  const text = errorText(error);
+  if (
+    /quota|429|resource_exhausted|too many requests|rate.?limit/i.test(text)
+  ) {
+    return "The generation model's rate limit / daily quota was reached. Wait for it to reset, use an API key with higher limits, or point GENERATE_MODEL at a different model.";
+  }
+  if (/unauthenticated|permission_denied|api[_ ]?key|401|403/i.test(text)) {
+    return "The generation model rejected the API key. Check GOOGLE_GENERATIVE_AI_API_KEY.";
+  }
+  return errorMessage(error);
+}
+
 /** Load the content document's markdown + section tree by id (server-side only). */
 async function loadContentDocument(
   db: TDb,
@@ -168,6 +200,8 @@ export const generateDeck = createServerFn({ method: "POST" })
     const archetypeIds = Object.keys(ARCHETYPES);
 
     // Plan (one model call) with a deterministic fallback — a planner hiccup never breaks gen.
+    // But a fatal provider error (quota/auth) would doom every fill too, so abort now with a
+    // clear message rather than falling back into a deck that can't be filled.
     let plan: TSlidePlan;
     try {
       plan = await planDeck(
@@ -176,7 +210,11 @@ export const generateDeck = createServerFn({ method: "POST" })
         archetypeIds,
       );
       if (plan.slides.length === 0) plan = fallbackPlan(doc.sections);
-    } catch {
+    } catch (error) {
+      if (isFatalProviderError(error)) {
+        yield { type: "error", message: fatalProviderMessage(error) };
+        return;
+      }
       plan = fallbackPlan(doc.sections);
     }
 
@@ -205,6 +243,11 @@ export const generateDeck = createServerFn({ method: "POST" })
         await persistSlide(db, deckId, i, slide, grounding);
         yield { type: "slide", index: i, slide, grounding };
       } catch (error) {
+        // A quota/auth wall hits every remaining slide identically — surface it once and stop.
+        if (isFatalProviderError(error)) {
+          yield { type: "error", message: fatalProviderMessage(error) };
+          return;
+        }
         yield { type: "error", index: i, message: errorMessage(error) };
       }
     }

@@ -27,8 +27,9 @@ export async function planDeck(
     schema: SlidePlanSchema,
     system: PLAN_SYSTEM_PROMPT,
     prompt: buildPlanPrompt(brief, overview, archetypeIds),
-    // One retry beyond the initial attempt for transient/parse failures.
-    maxRetries: 1,
+    // Fail fast on the interactive hot path — see the note in `fill.ts`. The deterministic
+    // fallback plan covers a transient planner failure without an SDK-level retry.
+    maxRetries: 0,
   });
   return object;
 }
