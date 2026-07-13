@@ -8,6 +8,7 @@
  */
 import { z } from "zod";
 import type { ISection } from "@/lib/extract/section";
+import type { ITokens } from "@/lib/slides/types";
 
 /** Client → server payload: which PDF, its filename, and its bytes as base64 (no `data:` prefix). */
 export const ExtractDocumentInputSchema = z.object({
@@ -27,6 +28,9 @@ export interface IExtractedDocument {
   sourceName: string;
   markdown: string;
   sections: Array<ISection>;
+  /** Present only for a `design` document: the extracted design system + feel note. */
+  designTokens?: ITokens;
+  designFeel?: string;
 }
 
 /** Server → client result. `ok: false` leaves nothing persisted. */
