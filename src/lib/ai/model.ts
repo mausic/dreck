@@ -11,10 +11,10 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import type { LanguageModel } from "ai";
 
 /** Fast model on the hot path (edits are latency-sensitive); override with `EDIT_MODEL`. */
-const DEFAULT_EDIT_MODEL = "gemini-2.5-flash";
+const DEFAULT_EDIT_MODEL = "gemini-3.5-flash";
 
 /** Fast model for generation (planning + fill) too — speed-to-deck is a KPI. Override with `GENERATE_MODEL`. */
-const DEFAULT_GENERATE_MODEL = "gemini-2.5-flash";
+const DEFAULT_GENERATE_MODEL = "gemini-3.5-flash";
 
 /** Thrown when the provider key is absent; the server function turns it into a soft error. */
 export class MissingApiKeyError extends Error {

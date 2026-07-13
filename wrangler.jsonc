@@ -49,7 +49,7 @@
    * provider key (GOOGLE_GENERATIVE_AI_API_KEY) is a SECRET, not a var: set it in
    * `.dev.vars` for local dev and via `wrangler secret put` in production.
    */
-  // "vars": { "EDIT_MODEL": "gemini-2.5-flash" }
+  // "vars": { "EDIT_MODEL": "gemini-3.5-flash" }
   /**
    * Static Assets
    * https://developers.cloudflare.com/workers/static-assets/binding/

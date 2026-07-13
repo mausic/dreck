@@ -4,8 +4,8 @@
 # Provider API key for the region-edit model call (server-side only, never shipped to the client).
 GOOGLE_GENERATIVE_AI_API_KEY=
 
-# Optional: override the fast edit model (defaults to `gemini-2.5-flash`, mirrors wrangler.jsonc `vars`).
-# EDIT_MODEL=gemini-2.5-flash
+# Optional: override the fast edit model (defaults to `gemini-3.5-flash`, mirrors wrangler.jsonc `vars`).
+# EDIT_MODEL=gemini-3.5-flash
 
 # Mistral key for the Document (OCR) API — PDF → table-aware markdown (server-side only).
 MISTRAL_API_KEY=
