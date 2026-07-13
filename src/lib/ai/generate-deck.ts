@@ -2,9 +2,9 @@
  * `generateDeck` — the TanStack Start server function behind generation. It is the ORCHESTRATOR:
  * the model only plans and fills; this code owns the loop (plan → then, per slide: pick archetype
  * → fill → verify with bounded retry → persist). No agent, no durable-execution engine — a plain
- * async generator. Slides are generated with bounded concurrency ({@link GENERATE_CONCURRENCY} in
- * flight) and each is streamed the moment it completes, so slides paint progressively as they land
- * (out of submission order — the client places each by its `index`).
+ * async generator. Slides are generated with bounded concurrency (the `GENERATE_CONCURRENCY` env
+ * knob, in flight) and each is streamed the moment it completes, so slides paint progressively as
+ * they land (out of submission order — the client places each by its `index`).
  *
  * Robustness mirrors the edit/extract seams: the generator never throws to the client. A missing
  * key, a bad document id, a DB error, or a per-slide failure all become `error` events; the deck
@@ -37,12 +37,7 @@ import { selectSections, summarizeSections } from "@/lib/ai/sections";
 import { describeGroundingIssues } from "@/lib/ai/generate-prompt";
 import { fatalProviderMessage, isFatalProviderError } from "@/lib/ai/retry";
 import { runWithConcurrency } from "@/lib/ai/concurrency";
-
-/** Retry budget for an ungrounded slide. Bounded — never loops unbounded (spec). */
-const MAX_FILL_RETRIES = 1;
-
-/** Max slide fills in flight at once. Caps parallelism to stay well under provider rate limits. */
-const GENERATE_CONCURRENCY = 5;
+import { fillRetryBudget, generationConcurrency } from "@/lib/ai/config";
 
 type TDb = ReturnType<typeof getDb>;
 
@@ -148,13 +143,14 @@ async function buildOneSlide(args: {
     tokens: PHARMA_TOKENS,
   };
 
+  const maxRetries = fillRetryBudget();
   let slide = await fillSlide(base);
   let grounding = verifySlideGrounding(slide, args.markdown);
   let fit = verifySlideFit(slide);
 
   for (
     let attempt = 0;
-    attempt < MAX_FILL_RETRIES && (!grounding.ok || !fit.ok);
+    attempt < maxRetries && (!grounding.ok || !fit.ok);
     attempt++
   ) {
     slide = await fillSlide({
@@ -266,16 +262,16 @@ export const generateDeck = createServerFn({ method: "POST" })
     }
     yield { type: "plan", deckId, plan };
 
-    // Generate the slides with bounded concurrency (up to GENERATE_CONCURRENCY in flight), emitting
-    // each as it completes. The tasks are total, so the pool never throws; a fatal provider wall
-    // hits every slide the same way, so surface it once and stop launching more.
+    // Generate the slides with bounded concurrency (GENERATE_CONCURRENCY in flight), emitting each
+    // as it completes. The tasks are total, so the pool never throws; a fatal provider wall hits
+    // every slide the same way, so surface it once and stop launching more.
     const tasks = plan.slides.map(
       (item, index) => () => generateSlideTask(db, deckId, index, item, doc),
     );
 
     for await (const outcome of runWithConcurrency(
       tasks,
-      GENERATE_CONCURRENCY,
+      generationConcurrency(),
     )) {
       if (outcome.kind === "fatal") {
         yield { type: "error", message: outcome.message };

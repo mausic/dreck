@@ -7,8 +7,8 @@
  * (+ letter-spacing), and a line ≈ `fontSize × lineHeight` tall. From that it derives, per slot,
  * a character budget (fed into the fill prompt so the model writes to length) and a fit check
  * (run after fill so an overflowing slide can be regenerated — same verify→retry pattern as
- * grounding). The estimate is intentionally lenient (see {@link FIT_TOLERANCE}) so only clear
- * overflow triggers a regenerate. RATIO/tolerance are the tunables if budgets feel off.
+ * grounding). The estimate is intentionally lenient (the `GENERATE_FIT_TOLERANCE` knob) so only
+ * clear overflow triggers a regenerate. Ratio/tolerance are env-tunable if budgets feel off.
  */
 import type { CSSProperties } from "react";
 import type {
@@ -20,15 +20,14 @@ import type {
 } from "@/lib/slides/types";
 import { resolveStyle } from "@/lib/slides/styles";
 import { isLabelValue, isPanelContent } from "@/lib/slides/content";
+import { fitCharWidthRatio, fitTolerance } from "@/lib/ai/config";
 
-/** Average glyph advance ÷ font-size for the deck's proportional sans. The main tunable. */
-const CHAR_WIDTH_RATIO = 0.52;
+// The two calibration tunables — glyph-width ratio and overflow tolerance — are env-configurable
+// (see config.ts); read on use so a deploy can retune without a code change.
 /** Uppercase runs a touch wider; added to the ratio for `text-transform: uppercase` slots. */
 const UPPERCASE_EXTRA = 0.06;
 const DEFAULT_LINE_HEIGHT = 1.25;
 const DEFAULT_FONT_SIZE = 24;
-/** Allow this much over the estimated line budget before flagging — the estimate is rough. */
-const FIT_TOLERANCE = 1.15;
 
 // Panel content is nested (heading + body) with its own sizes — mirror styles.ts `sidebarPanel`
 // padding and slide-element.tsx `PanelBlock`.
@@ -71,7 +70,7 @@ function letterSpacingPx(
 function glyphWidth(fontSize: number, style: CSSProperties): number {
   const upper = style.textTransform === "uppercase" ? UPPERCASE_EXTRA : 0;
   return (
-    fontSize * (CHAR_WIDTH_RATIO + upper) +
+    fontSize * (fitCharWidthRatio() + upper) +
     letterSpacingPx(style.letterSpacing, fontSize)
   );
 }
@@ -116,19 +115,17 @@ function panelCapacity(
   heading: ICapacity;
   body: ICapacity;
 } {
+  const ratio = fitCharWidthRatio();
   const innerW = Math.max(1, w - 2 * PANEL_PAD_X);
   const innerH = Math.max(1, h - 2 * PANEL_PAD_Y);
   const headingCpl = Math.max(
     1,
-    Math.floor(innerW / (PANEL_HEADING_FS * CHAR_WIDTH_RATIO)),
+    Math.floor(innerW / (PANEL_HEADING_FS * ratio)),
   );
   const usedByHeading =
     PANEL_HEADING_LINES * PANEL_HEADING_FS * PANEL_HEADING_LH + PANEL_GAP;
   const bodyH = Math.max(PANEL_BODY_FS, innerH - usedByHeading);
-  const bodyCpl = Math.max(
-    1,
-    Math.floor(innerW / (PANEL_BODY_FS * CHAR_WIDTH_RATIO)),
-  );
+  const bodyCpl = Math.max(1, Math.floor(innerW / (PANEL_BODY_FS * ratio)));
   const bodyLines = Math.max(
     1,
     Math.floor(bodyH / (PANEL_BODY_FS * PANEL_BODY_LH)),
@@ -197,7 +194,7 @@ export interface IFitReport {
 }
 
 function overflows(usedLines: number, maxLines: number): boolean {
-  return usedLines > maxLines * FIT_TOLERANCE;
+  return usedLines > maxLines * fitTolerance();
 }
 
 function checkElement(element: ISlideElement, issues: Array<IFitIssue>): void {

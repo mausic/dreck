@@ -7,7 +7,14 @@
  * {@link withModelRetry}, which retries by error CLASS:
  *   • transient overloads (503 UNAVAILABLE, network blips) → a few quick, capped backoffs;
  *   • fatal walls (rate-limit/quota, bad/absent key) → no retry, surface immediately.
+ *
+ * Attempt count and backoff bounds are env-tunable (see `config.ts`).
  */
+import {
+  modelRetryAttempts,
+  modelRetryBaseMs,
+  modelRetryMaxMs,
+} from "@/lib/ai/config";
 
 /** Text to test a provider error against (covers AI SDK wrappers like AI_RetryError). */
 export function errorText(error: unknown): string {
@@ -62,21 +69,19 @@ export function fatalProviderMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Generation failed.";
 }
 
-const DEFAULT_MAX_ATTEMPTS = 3;
-const BASE_DELAY_MS = 500;
-const MAX_DELAY_MS = 2000;
-
 /**
- * Run a model call with class-aware retry. Retries only transient overloads, with a short,
- * capped exponential backoff (0.5s → 1s → 2s) — never the provider's long rate-limit wait.
+ * Run a model call with class-aware retry. Retries only transient overloads, with a short, capped
+ * exponential backoff (base doubling up to a cap) — never the provider's long rate-limit wait.
  * Fatal walls and non-transient errors throw on the first occurrence, so the caller can surface
  * them at once. The thunk MUST re-create the request each attempt (a consumed stream can't be
- * replayed).
+ * replayed). `maxAttempts` defaults to the env knob but can be overridden (e.g. in tests).
  */
 export async function withModelRetry<TResult>(
   run: () => Promise<TResult>,
-  maxAttempts = DEFAULT_MAX_ATTEMPTS,
+  maxAttempts = modelRetryAttempts(),
 ): Promise<TResult> {
+  const baseMs = modelRetryBaseMs();
+  const maxMs = modelRetryMaxMs();
   let lastError: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -85,7 +90,7 @@ export async function withModelRetry<TResult>(
       lastError = error;
       if (attempt === maxAttempts || !isTransientProviderError(error))
         throw error;
-      const delay = Math.min(BASE_DELAY_MS * 2 ** (attempt - 1), MAX_DELAY_MS);
+      const delay = Math.min(baseMs * 2 ** (attempt - 1), maxMs);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }

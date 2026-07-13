@@ -7,6 +7,19 @@ GOOGLE_GENERATIVE_AI_API_KEY=
 # Optional: override the fast edit model (defaults to `gemini-3.5-flash`, mirrors wrangler.jsonc `vars`).
 # EDIT_MODEL=gemini-3.5-flash
 
+# Optional: override the fast generation model (planning + fill; defaults to `gemini-3.5-flash`).
+# GENERATE_MODEL=gemini-3.5-flash
+
+# Optional: generation tuning knobs (see src/lib/ai/config.ts). Each falls back to the default
+# shown and is clamped to a safe range, so leaving them unset is fine.
+# GENERATE_CONCURRENCY=5              # max slide fills in flight at once (1–16)
+# GENERATE_FILL_RETRIES=1            # regenerate budget per ungrounded/overflowing slide (0–5)
+# GENERATE_MODEL_RETRY_ATTEMPTS=3    # attempts on a transient model overload (1–6)
+# GENERATE_MODEL_RETRY_BASE_MS=500   # base transient-retry backoff, doubles each attempt
+# GENERATE_MODEL_RETRY_MAX_MS=2000   # cap on the transient-retry backoff
+# GENERATE_FIT_CHAR_RATIO=0.52       # glyph advance ÷ font-size for the text-fit estimator
+# GENERATE_FIT_TOLERANCE=1.15        # overflow leniency before a slide is regenerated (≥1)
+
 # Mistral key for the Document (OCR) API — PDF → table-aware markdown (server-side only).
 MISTRAL_API_KEY=
 
