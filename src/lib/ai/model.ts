@@ -16,6 +16,9 @@ const DEFAULT_EDIT_MODEL = "gemini-3.5-flash";
 /** Fast model for generation (planning + fill) too — speed-to-deck is a KPI. Override with `GENERATE_MODEL`. */
 const DEFAULT_GENERATE_MODEL = "gemini-3.5-flash";
 
+/** Model for design-system extraction — reads the design PDF for its palette. Override with `DESIGN_MODEL`. */
+const DEFAULT_DESIGN_MODEL = "gemini-3.5-flash";
+
 /** Thrown when the provider key is absent; the server function turns it into a soft error. */
 export class MissingApiKeyError extends Error {
   constructor() {
@@ -39,5 +42,14 @@ export function getGenerateModel(): LanguageModel {
   if (!apiKey) throw new MissingApiKeyError();
 
   const modelId = process.env.GENERATE_MODEL ?? DEFAULT_GENERATE_MODEL;
+  return createGoogleGenerativeAI({ apiKey })(modelId);
+}
+
+/** Build the design-extraction model from env (`GOOGLE_GENERATIVE_AI_API_KEY`, `DESIGN_MODEL`). */
+export function getDesignModel(): LanguageModel {
+  const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+  if (!apiKey) throw new MissingApiKeyError();
+
+  const modelId = process.env.DESIGN_MODEL ?? DEFAULT_DESIGN_MODEL;
   return createGoogleGenerativeAI({ apiKey })(modelId);
 }
