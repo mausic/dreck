@@ -1,17 +1,3 @@
-/**
- * Drizzle schema. Two concerns: uploaded source documents and their extraction
- * (`documents`), and the decks generated from them (`decks` + `slides`).
- *
- * `markdown` is the verbatim OCR output — the durable source of truth the grounding step
- * verifies generated slides against, so it is kept exactly as returned. `sections` is the
- * generic tree from `parseSections`, stored as typed jsonb (`.$type<…>()`) — strict shape,
- * open string vocabulary, never an untyped blob. `role` is the one closed set (content vs
- * design PDF), narrowed at the TS boundary without a Postgres enum migration.
- *
- * A generated `slide` is stored as the whole flat {@link ISlide} jsonb (elements embedded,
- * matching how the renderer/editor consume it — no separate elements table). Grounding flags
- * ride in a sibling column, never inside the slide model, so the model stays unchanged.
- */
 import {
   integer,
   jsonb,

@@ -10,7 +10,7 @@
  *
  * Attempt count and backoff bounds are env-tunable (see `config.ts`).
  */
-import { generationConfig } from "@/lib/ai/config";
+import { getConfig } from "@/lib/config";
 
 /** Text to test a provider error against (covers AI SDK wrappers like AI_RetryError). */
 export function errorText(error: unknown): string {
@@ -76,11 +76,12 @@ export async function withModelRetry<TResult>(
   run: () => Promise<TResult>,
   maxAttempts?: number,
 ): Promise<TResult> {
+  const generationConfig = getConfig().generation;
   const {
     GENERATE_MODEL_RETRY_ATTEMPTS,
     GENERATE_MODEL_RETRY_BASE_MS: baseMs,
     GENERATE_MODEL_RETRY_MAX_MS: maxMs,
-  } = generationConfig();
+  } = generationConfig;
   const attempts = maxAttempts ?? GENERATE_MODEL_RETRY_ATTEMPTS;
   let lastError: unknown;
   for (let attempt = 1; attempt <= attempts; attempt++) {

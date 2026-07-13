@@ -20,12 +20,13 @@ export const PLAN_PROMPT_VERSION = "plan/v1";
 export const FILL_PROMPT_VERSION = "fill/v1";
 
 /** System policy for the planner: turn a brief into a right-sized, section-grounded plan. */
-export const PLAN_SYSTEM_PROMPT = `You are a presentation planner for a corporate pharmaceutical slide deck.
+export const PLAN_SYSTEM_PROMPT = `You are a presentation planner for a corporate slide deck.
 
 You are given the user's brief and a compact overview of a source document (a list of sections, each with an id, title, kind, and a short snippet).
 
 Your job is to decide the slide plan:
 - Let the BRIEF drive the number of slides. If the brief names N distinct topics (e.g. "the financial, functional and research info"), produce about N slides — one per topic. Do not pad the deck or force a fixed count.
+- Always include the cover/title slide first, with no sections. Then choose which section(s) feed each slide, in reading order.
 - For each slide, choose the section id(s) whose content best supports it. Prefer a small, focused set of sections per slide. A cover/title slide may use no sections.
 - Write a short intent (what the slide is about) and a working title for each slide.
 - Optionally suggest an archetypeId from the available set when one clearly fits (e.g. a tabular/figures slide → a table archetype); otherwise omit it and let the system choose.
@@ -80,7 +81,7 @@ export function fillableSlots(archetype: IArchetype): Array<ISlot> {
 }
 
 /** System policy for the fill: pour selected content into the archetype's slots, grounded. */
-export const FILL_SYSTEM_PROMPT = `You are a slide copywriter for a corporate pharmaceutical deck.
+export const FILL_SYSTEM_PROMPT = `You are a slide copywriter for a corporate deck.
 
 You are given one slide to fill: its intent, its layout slots (each with a slotId, role, the content "kind" it expects, and a size hint), the verbatim source content selected for this slide, and the deck's design tokens.
 

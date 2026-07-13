@@ -15,7 +15,7 @@
 import { useEffect, useState } from "react";
 import type { IDeck, ISlide, ITokens } from "@/lib/slides";
 import type { IGroundingReport } from "@/lib/ai/generate-schema";
-import { DEMO_DECK, PHARMA_TOKENS } from "@/lib/slides";
+import { DESIGN_TOKENS } from "@/lib/slides";
 import {
   generateDeck,
   listRecentContentDocs,
@@ -50,7 +50,7 @@ function SlotCard({
 }) {
   return (
     <div className="relative flex flex-col gap-1.5">
-      <div className="bg-card relative aspect-[16/9] w-full overflow-hidden rounded-md border">
+      <div className="bg-card relative aspect-video w-full overflow-hidden rounded-md border">
         {state.status === "ready" ? (
           <SlidePreview slide={state.slide} tokens={tokens} />
         ) : state.status === "error" ? (
@@ -95,7 +95,7 @@ export function GeneratePanel() {
   const [doneDeck, setDoneDeck] = useState<IDeck | null>(null);
   // The design tokens the deck is styled with — set from the plan event (the extracted design
   // system), falling back to the placeholder tokens until then / when no design doc is chosen.
-  const [tokens, setTokens] = useState<ITokens>(PHARMA_TOKENS);
+  const [tokens, setTokens] = useState<ITokens>(DESIGN_TOKENS);
 
   // Load recent content + design documents for the pickers.
   useEffect(() => {
@@ -132,7 +132,7 @@ export function GeneratePanel() {
     setTopError(null);
     setDoneDeck(null);
     setItems([]);
-    setTokens(PHARMA_TOKENS);
+    setTokens(DESIGN_TOKENS);
 
     const readyByIndex = new Map<number, ISlide>();
     let sawDone = false;
@@ -193,7 +193,7 @@ export function GeneratePanel() {
   }
 
   const isGenerating = status === "generating";
-  const editorDeck = doneDeck ?? DEMO_DECK;
+  const editorDeck = doneDeck;
   const flagged = items.flatMap((it, i) =>
     it.status === "ready" && !it.grounding.ok
       ? [{ index: i, tokens: it.grounding.issues.map((x) => x.token) }]
@@ -292,7 +292,7 @@ export function GeneratePanel() {
 
       {/* During generation the progressive grid is the view; otherwise the full editor. Keyed by
           deck id so the editor mounts fresh when a generated deck replaces the placeholder. */}
-      {!isGenerating && (
+      {!isGenerating && editorDeck && (
         <DeckView key={editorDeck.id} deck={editorDeck} tokens={tokens} />
       )}
     </div>

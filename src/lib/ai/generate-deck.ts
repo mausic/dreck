@@ -26,7 +26,7 @@ import type {
 import { getDb } from "@/db/client";
 import { decks, documents, slides } from "@/db/schema";
 import { ARCHETYPES, getArchetype } from "@/lib/slides/archetypes";
-import { PHARMA_TOKENS } from "@/lib/slides/tokens";
+import { DESIGN_TOKENS } from "@/lib/slides/tokens";
 import { GenerateDeckInputSchema } from "@/lib/ai/generate-schema";
 import { fallbackPlan, planDeck } from "@/lib/ai/plan";
 import { pickArchetype } from "@/lib/ai/pick-archetype";
@@ -37,7 +37,7 @@ import { selectSections, summarizeSections } from "@/lib/ai/sections";
 import { describeGroundingIssues } from "@/lib/ai/generate-prompt";
 import { fatalProviderMessage, isFatalProviderError } from "@/lib/ai/retry";
 import { runWithConcurrency } from "@/lib/ai/concurrency";
-import { generationConfig } from "@/lib/ai/config";
+import { getConfig } from "@/lib/config";
 
 type TDb = ReturnType<typeof getDb>;
 
@@ -81,16 +81,16 @@ async function loadDesignTokens(
   db: TDb,
   designDocId: string | undefined,
 ): Promise<ITokens> {
-  if (!designDocId) return PHARMA_TOKENS;
+  if (!designDocId) return DESIGN_TOKENS;
   try {
     const rows = await db
       .select({ designTokens: documents.designTokens })
       .from(documents)
       .where(eq(documents.id, designDocId))
       .limit(1);
-    return rows[0]?.designTokens ?? PHARMA_TOKENS;
+    return rows[0]?.designTokens ?? DESIGN_TOKENS;
   } catch {
-    return PHARMA_TOKENS;
+    return DESIGN_TOKENS;
   }
 }
 
@@ -156,6 +156,7 @@ async function buildOneSlide(args: {
   markdown: string;
   tokens: ITokens;
 }): Promise<{ slide: IWireSlide; grounding: IGroundingReport }> {
+  const generationConfig = getConfig().generation;
   const archetype = getArchetype(args.archetypeId);
   const base = {
     slideId: args.slideId,
@@ -166,7 +167,7 @@ async function buildOneSlide(args: {
     tokens: args.tokens,
   };
 
-  const maxRetries = generationConfig().GENERATE_FILL_RETRIES;
+  const maxRetries = generationConfig.GENERATE_FILL_RETRIES;
   let slide = await fillSlide(base);
   let grounding = verifySlideGrounding(slide, args.markdown);
   let fit = verifySlideFit(slide);
@@ -237,16 +238,6 @@ export const generateDeck = createServerFn({ method: "POST" })
     GenerateDeckInputSchema.parse(input),
   )
   .handler(async function* ({ data }): AsyncGenerator<TGenerationEvent> {
-    // Fill needs the model, so a missing key can't produce any slide — fail fast with one clear
-    // error rather than N identical per-slide failures.
-    if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-      yield {
-        type: "error",
-        message: "GOOGLE_GENERATIVE_AI_API_KEY is not set.",
-      };
-      return;
-    }
-
     let db: TDb;
     let doc: { markdown: string; sections: Array<ISection> };
     let tokens: ITokens;
@@ -299,10 +290,11 @@ export const generateDeck = createServerFn({ method: "POST" })
       (item, index) => () =>
         generateSlideTask(db, deckId, index, item, doc, tokens),
     );
+    const generationConfig = getConfig().generation;
 
     for await (const outcome of runWithConcurrency(
       tasks,
-      generationConfig().GENERATE_CONCURRENCY,
+      generationConfig.GENERATE_CONCURRENCY,
     )) {
       if (outcome.kind === "fatal") {
         yield { type: "error", message: outcome.message };

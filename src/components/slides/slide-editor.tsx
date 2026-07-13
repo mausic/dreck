@@ -96,7 +96,7 @@ export function SlideEditor({ slide, tokens, onChange }: ISlideEditorProps) {
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col gap-3">
       <div className="flex min-h-0 flex-1 items-center justify-center">
-        <div className="aspect-[16/9] w-full max-w-[1180px] overflow-hidden rounded-xl border bg-card shadow-sm">
+        <div className="aspect-video w-full max-w-295 overflow-hidden rounded-xl border bg-card shadow-sm">
           <SlidePreview
             slide={slide}
             tokens={tokens}

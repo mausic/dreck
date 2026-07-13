@@ -20,7 +20,7 @@ import type {
 } from "@/lib/slides/types";
 import { resolveStyle } from "@/lib/slides/styles";
 import { isLabelValue, isPanelContent } from "@/lib/slides/content";
-import { generationConfig } from "@/lib/ai/config";
+import { getConfig } from "@/lib/config";
 
 // The two calibration tunables — glyph-width ratio and overflow tolerance — are env-configurable
 // (see config.ts); read on use so a deploy can retune without a code change.
@@ -68,7 +68,8 @@ function letterSpacingPx(
 }
 
 function glyphWidth(fontSize: number, style: CSSProperties): number {
-  const ratio = generationConfig().GENERATE_FIT_CHAR_RATIO;
+  const generationConfig = getConfig().generation;
+  const ratio = generationConfig.GENERATE_FIT_CHAR_RATIO;
   const upper = style.textTransform === "uppercase" ? UPPERCASE_EXTRA : 0;
   return (
     fontSize * (ratio + upper) + letterSpacingPx(style.letterSpacing, fontSize)
@@ -115,7 +116,8 @@ function panelCapacity(
   heading: ICapacity;
   body: ICapacity;
 } {
-  const ratio = generationConfig().GENERATE_FIT_CHAR_RATIO;
+  const generationConfig = getConfig().generation;
+  const ratio = generationConfig.GENERATE_FIT_CHAR_RATIO;
   const innerW = Math.max(1, w - 2 * PANEL_PAD_X);
   const innerH = Math.max(1, h - 2 * PANEL_PAD_Y);
   const headingCpl = Math.max(
@@ -194,7 +196,8 @@ export interface IFitReport {
 }
 
 function overflows(usedLines: number, maxLines: number): boolean {
-  return usedLines > maxLines * generationConfig().GENERATE_FIT_TOLERANCE;
+  const generationConfig = getConfig().generation;
+  return usedLines > maxLines * generationConfig.GENERATE_FIT_TOLERANCE;
 }
 
 function checkElement(element: ISlideElement, issues: Array<IFitIssue>): void {

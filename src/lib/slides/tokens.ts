@@ -22,15 +22,9 @@ export const TokensSchema = z.object({
 }) satisfies z.ZodType<ITokens>;
 
 /**
- * Placeholder design tokens approximating a corporate pharma design system.
- *
- * approximate — replaced by real design-system extraction in a later task
- * (rasterize the design PDF → VLM, hybrid with deterministic fonts/colors).
- *
- * Fonts list the intended families first and fall back to system sans so the
- * prototype renders correctly without bundling the real webfonts yet.
+ * Default design tokens.
  */
-export const PHARMA_TOKENS: ITokens = {
+export const DESIGN_TOKENS: ITokens = {
   colors: {
     primary: "#0d3b5c", // brand primary — title bg + callout panels (approx. deep navy)
     surface: "#f4f7f9", // light surface (approx. light grey)

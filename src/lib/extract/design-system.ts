@@ -15,7 +15,7 @@
 import { generateObject } from "ai";
 import { z } from "zod";
 import type { ITokens } from "@/lib/slides/types";
-import { PHARMA_TOKENS, TokensSchema } from "@/lib/slides/tokens";
+import { DESIGN_TOKENS, TokensSchema } from "@/lib/slides/tokens";
 import { getDesignModel } from "@/lib/ai/model";
 import { withModelRetry } from "@/lib/ai/retry";
 import { extractFonts } from "@/lib/extract/fonts";
@@ -91,8 +91,8 @@ export async function extractDesignSystem(
   const tokens: ITokens = {
     colors: object.colors,
     fonts: {
-      display: fonts.display ?? PHARMA_TOKENS.fonts.display,
-      body: fonts.body ?? PHARMA_TOKENS.fonts.body,
+      display: fonts.display ?? DESIGN_TOKENS.fonts.display,
+      body: fonts.body ?? DESIGN_TOKENS.fonts.body,
     },
   };
 
