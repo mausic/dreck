@@ -18,9 +18,9 @@
  * `applyPatch` already consumes — the tag never escapes this module.
  */
 import { z } from "zod";
-import type { ITokens } from "@/lib/slides/types";
 import type { TWireContent } from "@/lib/ai/content-patch";
 import { toSlotContent, zContentPatch } from "@/lib/ai/content-patch";
+import { TokensSchema } from "@/lib/slides/tokens";
 
 // The tagged content union + its collapse helper now live in `content-patch.ts` (shared
 // with generation). Re-exported here so existing importers (`edit-region.ts`) are unchanged.
@@ -41,22 +41,6 @@ export const zSlotContent = z.union([
   z.record(z.string(), z.unknown()),
 ]);
 
-/** Design tokens forwarded as an on-brand tone cue. Mirrors {@link ITokens} exactly. */
-const zTokens = z.object({
-  colors: z.object({
-    primary: z.string(),
-    surface: z.string(),
-    accent: z.string(),
-    white: z.string(),
-    textDark: z.string(),
-    textMuted: z.string(),
-  }),
-  fonts: z.object({
-    display: z.string(),
-    body: z.string(),
-  }),
-}) satisfies z.ZodType<ITokens>;
-
 /** Client → server payload for a single region edit. */
 export const EditRegionInputSchema = z.object({
   /** The user's edit instruction (the task). */
@@ -74,7 +58,7 @@ export const EditRegionInputSchema = z.object({
   /** Read-only text from the rest of the slide, for coherence. Never edited. */
   context: z.array(z.string()).default([]),
   /** The deck's design tokens, so tone/style stays on-brand. */
-  tokens: zTokens.optional(),
+  tokens: TokensSchema.optional(),
 });
 
 export type TEditRegionInput = z.input<typeof EditRegionInputSchema>;

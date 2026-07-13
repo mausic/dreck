@@ -1,4 +1,25 @@
+import { z } from "zod";
 import type { ITokens } from "@/lib/slides/types";
+
+/**
+ * Canonical Zod schema for {@link ITokens}. One definition consumed everywhere a Tokens object
+ * is parsed — the region-edit tone cue and the design-system extraction output — so the extracted
+ * design system provably matches the shape the renderer/editor/generation already consume.
+ */
+export const TokensSchema = z.object({
+  colors: z.object({
+    primary: z.string(),
+    surface: z.string(),
+    accent: z.string(),
+    white: z.string(),
+    textDark: z.string(),
+    textMuted: z.string(),
+  }),
+  fonts: z.object({
+    display: z.string(),
+    body: z.string(),
+  }),
+}) satisfies z.ZodType<ITokens>;
 
 /**
  * Placeholder design tokens approximating a corporate pharma design system.
