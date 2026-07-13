@@ -49,7 +49,7 @@ export function DeckView({ deck: initialDeck, tokens }: IDeckViewProps) {
               aria-current={isActive}
               aria-label={`Slide ${index + 1}`}
               className={cn(
-                "relative aspect-[16/9] w-full overflow-hidden rounded-md border-2 bg-card transition-colors",
+                "relative aspect-video w-full overflow-hidden rounded-md border-2 bg-card transition-colors",
                 isActive
                   ? "border-primary"
                   : "border-transparent hover:border-border",

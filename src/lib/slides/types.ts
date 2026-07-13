@@ -49,7 +49,7 @@ export type TSlotLayout = "stack" | "grid" | "centered";
  */
 export type TStyleRef = string;
 
-/** Design tokens approximating a corporate pharma design system. */
+/** Design tokens approximating a corporate design system. */
 export interface ITokens {
   colors: {
     primary: string;

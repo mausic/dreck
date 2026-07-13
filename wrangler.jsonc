@@ -42,14 +42,8 @@
    * Environment Variables
    * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
    * Note: Use secrets to store sensitive data.
-   * https://developers.cloudflare.com/workers/configuration/secrets/
-   *
-   * EDIT_MODEL — overrides the fast model used by the region-edit server function. The
-   * default lives in code (`src/lib/ai/model.ts`); set this only to change it. The
-   * provider key (GOOGLE_GENERATIVE_AI_API_KEY) is a SECRET, not a var: set it in
-   * `.dev.vars` for local dev and via `wrangler secret put` in production.
+   * https://developers.cloudflare.com/workers/configuration/secrets/   *
    */
-  // "vars": { "EDIT_MODEL": "gemini-3.5-flash" }
   /**
    * Static Assets
    * https://developers.cloudflare.com/workers/static-assets/binding/
