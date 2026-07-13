@@ -1,21 +1,32 @@
 /**
  * `ExtractPanel` — the extraction scaffolding, mounted above the deck preview on `/`.
  *
- * Upload a reference/design PDF → the `extractDocument` server function runs the two
- * extraction stages (Mistral markdown, then the deterministic section tree) and persists
- * them → this panel renders the stored raw markdown (to eyeball that tables survived) beside
- * the collapsible generic section tree. It lives on the home page rather than a separate
- * route because extraction is the front of the same flow that produces the preview below.
+ * Drop a content PDF and/or a design PDF → the `extractDocument` server function runs the two
+ * extraction stages (Mistral markdown, then the deterministic section tree) and persists them.
+ * Each drop-zone uploads its own role independently: the content result renders as stored raw
+ * markdown (to eyeball that tables survived) beside the collapsible generic section tree, and
+ * the design result renders the extracted design system (fonts + palette). It lives on the home
+ * page rather than a separate route because extraction is the front of the same flow that
+ * produces the preview below.
  */
 import { useState } from "react";
 import type { ISection } from "@/lib/extract/section";
 import type { TExtractDocumentResult } from "@/lib/extract/extract-schema";
 import { extractDocument } from "@/lib/extract/extract-document";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { FileDropzone } from "@/components/ui/dropzone";
 import { Label } from "@/components/ui/label";
 
 type TRole = "content" | "design";
+
+/** Per-role upload state: the chosen file, whether extraction is in flight, and its result. */
+type TExtractState = {
+  file: File | null;
+  pending: boolean;
+  result: TExtractDocumentResult | null;
+};
+
+const EMPTY_STATE: TExtractState = { file: null, pending: false, result: null };
 
 /** Read a File to base64 (without the `data:…;base64,` prefix) for the JSON payload. */
 function readAsBase64(file: File): Promise<string> {
@@ -34,6 +45,18 @@ function readAsBase64(file: File): Promise<string> {
       reject(reader.error ?? new Error("Failed to read file"));
     reader.readAsDataURL(file);
   });
+}
+
+/** The short status line rendered under a drop-zone's filename while/after it uploads. */
+function statusLine(state: TExtractState): React.ReactNode {
+  if (state.pending) return "Extracting…";
+  if (state.result?.ok)
+    return (
+      <span className="text-primary">
+        Extracted · id {state.result.id.slice(0, 8)}
+      </span>
+    );
+  return null;
 }
 
 /** One node of the section tree, rendered as a collapsible block, recursing into children. */
@@ -63,89 +86,108 @@ function SectionNode({ section }: { section: ISection }) {
 }
 
 export function ExtractPanel() {
-  const [role, setRole] = useState<TRole>("content");
-  const [file, setFile] = useState<File | null>(null);
-  const [pending, setPending] = useState(false);
-  const [result, setResult] = useState<TExtractDocumentResult | null>(null);
+  const [content, setContent] = useState<TExtractState>(EMPTY_STATE);
+  const [design, setDesign] = useState<TExtractState>(EMPTY_STATE);
 
-  async function handleSubmit(event: React.FormEvent) {
-    event.preventDefault();
-    if (!file || pending) return;
-    setPending(true);
-    setResult(null);
+  /** Read the file, extract it under `role`, and stream the states into `setState`. */
+  async function runExtract(
+    role: TRole,
+    file: File,
+    setState: (next: TExtractState) => void,
+  ) {
+    setState({ file, pending: true, result: null });
     try {
       const pdfBase64 = await readAsBase64(file);
       const res = await extractDocument({
         data: { role, sourceName: file.name, pdfBase64 },
       });
-      setResult(res);
+      setState({ file, pending: false, result: res });
     } catch (error) {
-      setResult({
-        ok: false,
-        error: error instanceof Error ? error.message : "Upload failed.",
+      setState({
+        file,
+        pending: false,
+        result: {
+          ok: false,
+          error: error instanceof Error ? error.message : "Upload failed.",
+        },
       });
-    } finally {
-      setPending(false);
     }
+  }
+
+  /** Drop-zone callback: clear on removal, otherwise kick off extraction for the role. */
+  function handleSelect(
+    role: TRole,
+    setState: (next: TExtractState) => void,
+    file: File | null,
+  ) {
+    if (!file) {
+      setState(EMPTY_STATE);
+      return;
+    }
+    void runExtract(role, file, setState);
   }
 
   return (
     <section className="flex flex-col gap-4 rounded-lg border p-4">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h2 className="text-sm font-semibold">Extract from PDF</h2>
-          <p className="text-muted-foreground text-sm">
-            Upload a PDF → stored table-aware markdown + generic section tree.
-          </p>
-        </div>
-        <form
-          onSubmit={handleSubmit}
-          className="flex flex-wrap items-end gap-4"
-        >
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="pdf">Reference PDF</Label>
-            <input
-              id="pdf"
-              type="file"
-              accept=".pdf,application/pdf"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              className="text-sm"
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="role">Role</Label>
-            <select
-              id="role"
-              value={role}
-              onChange={(e) => setRole(e.target.value as TRole)}
-              className="border-input bg-background h-9 rounded-md border px-3 text-sm"
-            >
-              <option value="content">content</option>
-              <option value="design">design</option>
-            </select>
-          </div>
-          <Button type="submit" disabled={!file || pending}>
-            {pending ? "Extracting…" : "Extract"}
-          </Button>
-        </form>
+      <div>
+        <h2 className="text-sm font-semibold">Extract from PDF</h2>
+        <p className="text-muted-foreground text-sm">
+          Drop a content PDF and a design PDF — each is stored as table-aware
+          markdown + a generic section tree; the design PDF also yields a design
+          system.
+        </p>
       </div>
 
-      {result && !result.ok && (
-        <p className="border-destructive/50 text-destructive rounded-md border p-4 text-sm">
-          {result.error}
-        </p>
-      )}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="content-pdf">Content PDF</Label>
+          <FileDropzone
+            id="content-pdf"
+            accept=".pdf,application/pdf"
+            fileKind="PDF"
+            hint="The reference document your slides draw their content from."
+            file={content.file}
+            pending={content.pending}
+            status={statusLine(content)}
+            onFileSelect={(file) => handleSelect("content", setContent, file)}
+          />
+          {content.result && !content.result.ok && (
+            <p className="border-destructive/50 text-destructive rounded-md border p-3 text-sm">
+              {content.result.error}
+            </p>
+          )}
+        </div>
 
-      {result?.ok && result.designTokens && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="design-pdf">Design PDF</Label>
+          <FileDropzone
+            id="design-pdf"
+            accept=".pdf,application/pdf"
+            fileKind="PDF"
+            hint="The styled deck whose fonts + palette define the look."
+            file={design.file}
+            pending={design.pending}
+            status={statusLine(design)}
+            onFileSelect={(file) => handleSelect("design", setDesign, file)}
+          />
+          {design.result && !design.result.ok && (
+            <p className="border-destructive/50 text-destructive rounded-md border p-3 text-sm">
+              {design.result.error}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {design.result?.ok && design.result.designTokens && (
         <div className="flex flex-col gap-3 rounded-md border p-4">
           <h3 className="text-sm font-semibold">
             Extracted design system{" "}
             <span className="text-muted-foreground font-normal">
-              ({result.sourceName} · id {result.id.slice(0, 8)})
+              ({design.result.sourceName} · id {design.result.id.slice(0, 8)})
             </span>
           </h3>
           <div className="flex flex-wrap gap-3">
-            {Object.entries(result.designTokens.colors).map(
+            {Object.entries(design.result.designTokens.colors).map(
               ([colorRole, hex]) => (
                 <div key={colorRole} className="flex items-center gap-2">
                   <span
@@ -164,43 +206,43 @@ export function ExtractPanel() {
           <div className="text-muted-foreground text-xs">
             <p>
               <span className="font-medium">display:</span>{" "}
-              {result.designTokens.fonts.display}
+              {design.result.designTokens.fonts.display}
             </p>
             <p>
               <span className="font-medium">body:</span>{" "}
-              {result.designTokens.fonts.body}
+              {design.result.designTokens.fonts.body}
             </p>
-            {result.designFeel && (
-              <p className="mt-1 italic">“{result.designFeel}”</p>
+            {design.result.designFeel && (
+              <p className="mt-1 italic">“{design.result.designFeel}”</p>
             )}
           </div>
         </div>
       )}
 
-      {result?.ok && !result.designTokens && (
+      {content.result?.ok && (
         <div className="grid min-h-0 gap-6 lg:grid-cols-2">
           <div className="flex min-h-0 flex-col gap-2">
             <h3 className="text-sm font-semibold">
               Stored markdown{" "}
               <span className="text-muted-foreground font-normal">
-                ({result.sourceName} · {result.role} · id{" "}
-                {result.id.slice(0, 8)})
+                ({content.result.sourceName} · {content.result.role} · id{" "}
+                {content.result.id.slice(0, 8)})
               </span>
             </h3>
             <pre className="bg-muted/50 max-h-[50vh] overflow-auto rounded-md border p-3 text-xs whitespace-pre">
-              {result.markdown}
+              {content.result.markdown}
             </pre>
           </div>
           <div className="flex min-h-0 flex-col gap-2">
             <h3 className="text-sm font-semibold">
               Section tree{" "}
               <span className="text-muted-foreground font-normal">
-                ({result.sections.length} root
-                {result.sections.length === 1 ? "" : "s"})
+                ({content.result.sections.length} root
+                {content.result.sections.length === 1 ? "" : "s"})
               </span>
             </h3>
             <div className="max-h-[50vh] space-y-2 overflow-auto rounded-md border p-3">
-              {result.sections.map((section) => (
+              {content.result.sections.map((section) => (
                 <SectionNode key={section.id} section={section} />
               ))}
             </div>
