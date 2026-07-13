@@ -333,13 +333,22 @@ export const listRecentContentDocs = createServerFn({ method: "GET" }).handler(
   },
 );
 
-/** List recent design documents (those with an extracted design system) for the panel's picker. */
+/**
+ * List recent design documents (those with an extracted design system) for the panel's picker.
+ * Includes the cached tokens + feel so selecting one can preview its design system without a
+ * second round-trip.
+ */
 export const listRecentDesignDocs = createServerFn({ method: "GET" }).handler(
   async () => {
     try {
       const db = getDb();
       const docs = await db
-        .select({ id: documents.id, sourceName: documents.sourceName })
+        .select({
+          id: documents.id,
+          sourceName: documents.sourceName,
+          designTokens: documents.designTokens,
+          designFeel: documents.designFeel,
+        })
         .from(documents)
         .where(eq(documents.role, "design"))
         .orderBy(desc(documents.createdAt))

@@ -16,6 +16,7 @@
 import { useEffect, useState } from "react";
 import type { ISection } from "@/lib/extract/section";
 import type { TExtractDocumentResult } from "@/lib/extract/extract-schema";
+import type { ITokens } from "@/lib/slides/types";
 import { extractDocument } from "@/lib/extract/extract-document";
 import {
   listRecentContentDocs,
@@ -27,8 +28,16 @@ import { Label } from "@/components/ui/label";
 
 type TRole = "content" | "design";
 
-/** A pickable already-extracted document (newest first) for a zone's "existing" dropdown. */
-type TDocOption = { id: string; sourceName: string };
+/**
+ * A pickable already-extracted document (newest first) for a zone's "existing" dropdown. Design
+ * docs also carry their cached design system, so re-selecting one can preview it below.
+ */
+type TDocOption = {
+  id: string;
+  sourceName: string;
+  designTokens?: ITokens | null;
+  designFeel?: string | null;
+};
 
 /** Per-role state: an existing selection, or a chosen file with its in-flight/extraction result. */
 type TExtractState = {
@@ -100,6 +109,54 @@ function SectionNode({ section }: { section: ISection }) {
         <SectionNode key={child.id} section={child} />
       ))}
     </details>
+  );
+}
+
+/** The extracted design system (palette swatches + fonts + feel note) for a design document. */
+function DesignSystemView({
+  sourceName,
+  id,
+  tokens,
+  feel,
+}: {
+  sourceName: string;
+  id: string;
+  tokens: ITokens;
+  feel?: string | null;
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-md border p-4">
+      <h3 className="text-sm font-semibold">
+        Extracted design system{" "}
+        <span className="text-muted-foreground font-normal">
+          ({sourceName} · id {id.slice(0, 8)})
+        </span>
+      </h3>
+      <div className="flex flex-wrap gap-3">
+        {Object.entries(tokens.colors).map(([colorRole, hex]) => (
+          <div key={colorRole} className="flex items-center gap-2">
+            <span
+              className="h-8 w-8 rounded border"
+              style={{ background: hex }}
+            />
+            <span className="text-xs">
+              <span className="font-medium">{colorRole}</span>
+              <br />
+              <code className="text-muted-foreground">{hex}</code>
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="text-muted-foreground text-xs">
+        <p>
+          <span className="font-medium">display:</span> {tokens.fonts.display}
+        </p>
+        <p>
+          <span className="font-medium">body:</span> {tokens.fonts.body}
+        </p>
+        {feel && <p className="mt-1 italic">“{feel}”</p>}
+      </div>
+    </div>
   );
 }
 
@@ -213,9 +270,15 @@ export function ExtractPanel() {
       });
       setState({ file, pending: false, result: res, selectedId: "" });
       if (res.ok) {
-        // Newest first, de-duped, so the just-uploaded doc is immediately reselectable.
+        // Newest first, de-duped, so the just-uploaded doc is immediately reselectable — and a
+        // design upload carries its tokens so re-selecting it can preview the design system.
         setDocs((prev) => [
-          { id: res.id, sourceName: res.sourceName },
+          {
+            id: res.id,
+            sourceName: res.sourceName,
+            designTokens: res.designTokens ?? null,
+            designFeel: res.designFeel ?? null,
+          },
           ...prev.filter((doc) => doc.id !== res.id),
         ]);
       }
@@ -254,6 +317,29 @@ export function ExtractPanel() {
     setState(id ? { ...EMPTY_STATE, selectedId: id } : EMPTY_STATE);
   }
 
+  // Which design system to preview: a fresh upload's result, or the design system cached on an
+  // existing design doc chosen from the picker. The two are mutually exclusive by construction
+  // (uploading clears the selection and vice versa), so at most one is active.
+  const selectedDesignDoc = design.selectedId
+    ? designDocs.find((doc) => doc.id === design.selectedId)
+    : undefined;
+  const designSystem =
+    design.result?.ok && design.result.designTokens
+      ? {
+          sourceName: design.result.sourceName,
+          id: design.result.id,
+          tokens: design.result.designTokens,
+          feel: design.result.designFeel,
+        }
+      : selectedDesignDoc?.designTokens
+        ? {
+            sourceName: selectedDesignDoc.sourceName,
+            id: selectedDesignDoc.id,
+            tokens: selectedDesignDoc.designTokens,
+            feel: selectedDesignDoc.designFeel,
+          }
+        : null;
+
   return (
     <section className="flex flex-col gap-4 rounded-lg border p-4">
       <div>
@@ -291,45 +377,13 @@ export function ExtractPanel() {
         />
       </div>
 
-      {design.result?.ok && design.result.designTokens && (
-        <div className="flex flex-col gap-3 rounded-md border p-4">
-          <h3 className="text-sm font-semibold">
-            Extracted design system{" "}
-            <span className="text-muted-foreground font-normal">
-              ({design.result.sourceName} · id {design.result.id.slice(0, 8)})
-            </span>
-          </h3>
-          <div className="flex flex-wrap gap-3">
-            {Object.entries(design.result.designTokens.colors).map(
-              ([colorRole, hex]) => (
-                <div key={colorRole} className="flex items-center gap-2">
-                  <span
-                    className="h-8 w-8 rounded border"
-                    style={{ background: hex }}
-                  />
-                  <span className="text-xs">
-                    <span className="font-medium">{colorRole}</span>
-                    <br />
-                    <code className="text-muted-foreground">{hex}</code>
-                  </span>
-                </div>
-              ),
-            )}
-          </div>
-          <div className="text-muted-foreground text-xs">
-            <p>
-              <span className="font-medium">display:</span>{" "}
-              {design.result.designTokens.fonts.display}
-            </p>
-            <p>
-              <span className="font-medium">body:</span>{" "}
-              {design.result.designTokens.fonts.body}
-            </p>
-            {design.result.designFeel && (
-              <p className="mt-1 italic">“{design.result.designFeel}”</p>
-            )}
-          </div>
-        </div>
+      {designSystem && (
+        <DesignSystemView
+          sourceName={designSystem.sourceName}
+          id={designSystem.id}
+          tokens={designSystem.tokens}
+          feel={designSystem.feel}
+        />
       )}
 
       {content.result?.ok && (
