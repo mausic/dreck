@@ -37,7 +37,7 @@ import { selectSections, summarizeSections } from "@/lib/ai/sections";
 import { describeGroundingIssues } from "@/lib/ai/generate-prompt";
 import { fatalProviderMessage, isFatalProviderError } from "@/lib/ai/retry";
 import { runWithConcurrency } from "@/lib/ai/concurrency";
-import { fillRetryBudget, generationConcurrency } from "@/lib/ai/config";
+import { generationConfig } from "@/lib/ai/config";
 
 type TDb = ReturnType<typeof getDb>;
 
@@ -143,7 +143,7 @@ async function buildOneSlide(args: {
     tokens: PHARMA_TOKENS,
   };
 
-  const maxRetries = fillRetryBudget();
+  const maxRetries = generationConfig().GENERATE_FILL_RETRIES;
   let slide = await fillSlide(base);
   let grounding = verifySlideGrounding(slide, args.markdown);
   let fit = verifySlideFit(slide);
@@ -271,7 +271,7 @@ export const generateDeck = createServerFn({ method: "POST" })
 
     for await (const outcome of runWithConcurrency(
       tasks,
-      generationConcurrency(),
+      generationConfig().GENERATE_CONCURRENCY,
     )) {
       if (outcome.kind === "fatal") {
         yield { type: "error", message: outcome.message };

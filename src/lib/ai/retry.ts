@@ -10,11 +10,7 @@
  *
  * Attempt count and backoff bounds are env-tunable (see `config.ts`).
  */
-import {
-  modelRetryAttempts,
-  modelRetryBaseMs,
-  modelRetryMaxMs,
-} from "@/lib/ai/config";
+import { generationConfig } from "@/lib/ai/config";
 
 /** Text to test a provider error against (covers AI SDK wrappers like AI_RetryError). */
 export function errorText(error: unknown): string {
@@ -78,18 +74,21 @@ export function fatalProviderMessage(error: unknown): string {
  */
 export async function withModelRetry<TResult>(
   run: () => Promise<TResult>,
-  maxAttempts = modelRetryAttempts(),
+  maxAttempts?: number,
 ): Promise<TResult> {
-  const baseMs = modelRetryBaseMs();
-  const maxMs = modelRetryMaxMs();
+  const {
+    GENERATE_MODEL_RETRY_ATTEMPTS,
+    GENERATE_MODEL_RETRY_BASE_MS: baseMs,
+    GENERATE_MODEL_RETRY_MAX_MS: maxMs,
+  } = generationConfig();
+  const attempts = maxAttempts ?? GENERATE_MODEL_RETRY_ATTEMPTS;
   let lastError: unknown;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
       return await run();
     } catch (error) {
       lastError = error;
-      if (attempt === maxAttempts || !isTransientProviderError(error))
-        throw error;
+      if (attempt === attempts || !isTransientProviderError(error)) throw error;
       const delay = Math.min(baseMs * 2 ** (attempt - 1), maxMs);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
