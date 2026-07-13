@@ -1,31 +1,22 @@
-/**
- * `GeneratePanel` — the generation front of the flow, mounted on `/` above the editor.
- *
- * Pick a previously-extracted content document + type a chat prompt → `generateDeck` streams the
- * deck back one slide at a time. Each slide paints into a progressive grid the moment it lands
- * (slide 1 visible while slide 2 is still generating), and grounding flags surface out-of-band
- * (never touching the slide model). When generation finishes, the deck is handed to the existing
- * {@link DeckView}, so generated slides render and edit through the unchanged renderer/editor.
- *
- * A design document can be selected too: its extracted design system (fonts + palette) styles the
- * deck. Generation resolves those tokens server-side and streams them on the plan event, so the
- * previews and editor render with the real deck's look; with no design doc, the fallback tokens
- * are used. Only the token SOURCE changes — the renderer/editor/archetypes are unchanged.
- */
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useForm } from "@tanstack/react-form";
+import { z } from "zod";
+import { Textarea } from "../ui/textarea";
+import type { AnyFieldApi } from "@tanstack/react-form";
 import type { IDeck, ISlide, ITokens } from "@/lib/slides";
 import type { IGroundingReport } from "@/lib/ai/generate-schema";
 import { DESIGN_TOKENS } from "@/lib/slides";
+import { generateDeck } from "@/lib/ai/generate-deck";
 import {
-  generateDeck,
-  listRecentContentDocs,
-  listRecentDesignDocs,
-} from "@/lib/ai/generate-deck";
+  contentDocsQueryOptions,
+  designDocsQueryOptions,
+} from "@/lib/documents/queries";
 import { DeckView } from "@/components/slides/deck-view";
 import { SlidePreview } from "@/components/slides/slide-preview";
+import { DocumentPicker } from "@/components/documents/document-select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -36,7 +27,71 @@ type TSlotState =
   | { status: "error"; message: string };
 
 type TStatus = "idle" | "generating" | "done" | "error";
-type TContentDoc = { id: string; sourceName: string };
+
+/** The generate form's fields, validated on change. `designDocId` is optional (default tokens). */
+const GenerateFormSchema = z.object({
+  contentDocId: z.string().min(1, "Pick a content document"),
+  prompt: z.string().trim().min(1, "Describe the deck"),
+  // Always a string — "" means "no design doc → default tokens" (see the picker's `noneLabel`).
+  designDocId: z.string(),
+});
+
+/** The first validation error for a touched field, rendered as a small destructive line. */
+function FieldError({ field }: { field: AnyFieldApi }) {
+  if (!field.state.meta.isTouched) return null;
+  const first = field.state.meta.errors[0];
+  if (!first) return null;
+  const message = typeof first === "string" ? first : first.message;
+  return <p className="text-destructive text-xs">{message}</p>;
+}
+
+/** The extracted design system (palette swatches + fonts + feel note) for a design document. */
+function DesignSystemView({
+  sourceName,
+  id,
+  tokens,
+  feel,
+}: {
+  sourceName: string;
+  id: string;
+  tokens: ITokens;
+  feel?: string | null;
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-md border p-4">
+      <h3 className="text-sm font-semibold">
+        Design system{" "}
+        <span className="text-muted-foreground font-normal">
+          ({sourceName} · id {id.slice(0, 8)})
+        </span>
+      </h3>
+      <div className="flex flex-wrap gap-3">
+        {Object.entries(tokens.colors).map(([colorRole, hex]) => (
+          <div key={colorRole} className="flex items-center gap-2">
+            <span
+              className="h-8 w-8 rounded border"
+              style={{ background: hex }}
+            />
+            <span className="text-xs">
+              <span className="font-medium">{colorRole}</span>
+              <br />
+              <code className="text-muted-foreground">{hex}</code>
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="text-muted-foreground text-xs">
+        <p>
+          <span className="font-medium">display:</span> {tokens.fonts.display}
+        </p>
+        <p>
+          <span className="font-medium">body:</span> {tokens.fonts.body}
+        </p>
+        {feel && <p className="mt-1 italic">“{feel}”</p>}
+      </div>
+    </div>
+  );
+}
 
 /** One card in the progressive grid: a 16:9 preview/skeleton with an index + grounding badge. */
 function SlotCard({
@@ -77,18 +132,17 @@ function SlotCard({
           ? state.title || "Generating…"
           : state.status === "error"
             ? "Failed"
-            : " "}
+            : " "}
       </p>
     </div>
   );
 }
 
 export function GeneratePanel() {
-  const [docs, setDocs] = useState<Array<TContentDoc>>([]);
-  const [contentDocId, setContentDocId] = useState("");
-  const [designDocs, setDesignDocs] = useState<Array<TContentDoc>>([]);
-  const [designDocId, setDesignDocId] = useState("");
-  const [prompt, setPrompt] = useState("");
+  // Shared, cached source lists — the DocumentPickers below fold fresh uploads into this cache.
+  const contentDocs = useQuery(contentDocsQueryOptions());
+  const designDocs = useQuery(designDocsQueryOptions());
+
   const [status, setStatus] = useState<TStatus>("idle");
   const [topError, setTopError] = useState<string | null>(null);
   const [items, setItems] = useState<Array<TSlotState>>([]);
@@ -97,37 +151,12 @@ export function GeneratePanel() {
   // system), falling back to the placeholder tokens until then / when no design doc is chosen.
   const [tokens, setTokens] = useState<ITokens>(DESIGN_TOKENS);
 
-  // Load recent content + design documents for the pickers.
-  useEffect(() => {
-    let active = true;
-    listRecentContentDocs()
-      .then((res) => {
-        if (!active || !res.ok) return;
-        setDocs(res.docs);
-        setContentDocId((prev) => prev || res.docs[0]?.id || "");
-      })
-      .catch(() => {
-        /* soft — the picker just stays empty */
-      });
-    listRecentDesignDocs()
-      .then((res) => {
-        if (!active || !res.ok) return;
-        setDesignDocs(res.docs);
-        setDesignDocId((prev) => prev || res.docs[0]?.id || "");
-      })
-      .catch(() => {
-        /* soft — design is optional; falls back to placeholder tokens */
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  async function handleGenerate(event: React.FormEvent) {
-    event.preventDefault();
-    const trimmed = prompt.trim();
-    if (!contentDocId || !trimmed || status === "generating") return;
-
+  /** Run generation and stream slide/plan/error events into the progressive-grid state. */
+  async function runGeneration(value: {
+    contentDocId: string;
+    designDocId?: string;
+    prompt: string;
+  }) {
     setStatus("generating");
     setTopError(null);
     setDoneDeck(null);
@@ -140,9 +169,9 @@ export function GeneratePanel() {
     try {
       const events = await generateDeck({
         data: {
-          contentDocId,
-          prompt: trimmed,
-          designDocId: designDocId || undefined,
+          contentDocId: value.contentDocId,
+          prompt: value.prompt.trim(),
+          designDocId: value.designDocId || undefined,
         },
       });
       for await (const ev of events) {
@@ -192,6 +221,32 @@ export function GeneratePanel() {
     }
   }
 
+  const form = useForm({
+    defaultValues: { contentDocId: "", designDocId: "", prompt: "" },
+    validators: { onChange: GenerateFormSchema },
+    onSubmit: async ({ value }) => {
+      await runGeneration(value);
+    },
+  });
+
+  // Seed each picker with the newest doc once its list resolves (mirrors the prior default), but
+  // only while the field is still empty, so a user's choice / cleared selection is respected.
+  const contentData = contentDocs.data;
+  useEffect(() => {
+    const first = contentData?.[0]?.id;
+    if (first && form.state.values.contentDocId === "") {
+      form.setFieldValue("contentDocId", first);
+    }
+  }, [contentData, form]);
+
+  const designData = designDocs.data;
+  useEffect(() => {
+    const first = designData?.[0]?.id;
+    if (first && form.state.values.designDocId === "") {
+      form.setFieldValue("designDocId", first);
+    }
+  }, [designData, form]);
+
   const isGenerating = status === "generating";
   const editorDeck = doneDeck;
   const flagged = items.flatMap((it, i) =>
@@ -206,64 +261,106 @@ export function GeneratePanel() {
         <div>
           <h2 className="text-sm font-semibold">Generate slides</h2>
           <p className="text-muted-foreground text-sm">
-            Pick an extracted content document, describe the deck, and slides
+            Pick or upload a content PDF (and, optionally, a design PDF whose
+            fonts + palette style the deck), describe the deck, and slides
             stream in as they’re generated.
           </p>
         </div>
 
         <form
-          onSubmit={handleGenerate}
-          className="flex flex-wrap items-end gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            void form.handleSubmit();
+          }}
+          className="flex flex-col gap-4"
         >
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="content-doc">Content document</Label>
-            <select
-              id="content-doc"
-              value={contentDocId}
-              onChange={(e) => setContentDocId(e.target.value)}
-              className="border-input bg-background h-9 min-w-56 rounded-md border px-3 text-sm"
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="content-doc">Content document</Label>
+              <form.Field name="contentDocId">
+                {(field) => (
+                  <>
+                    <DocumentPicker
+                      role="content"
+                      id="content-doc"
+                      ariaLabel="Content document"
+                      value={field.state.value}
+                      onValueChange={field.handleChange}
+                      docs={contentDocs.data ?? []}
+                      placeholder="Select a content document…"
+                      hint="The reference document your slides draw their content from."
+                    />
+                    <FieldError field={field} />
+                  </>
+                )}
+              </form.Field>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="design-doc">Design (optional)</Label>
+              <form.Field name="designDocId">
+                {(field) => (
+                  <DocumentPicker
+                    role="design"
+                    id="design-doc"
+                    ariaLabel="Design document"
+                    value={field.state.value}
+                    onValueChange={field.handleChange}
+                    docs={designDocs.data ?? []}
+                    noneLabel="Default tokens"
+                    hint="The styled deck whose fonts + palette define the look."
+                  />
+                )}
+              </form.Field>
+            </div>
+          </div>
+
+          {/* Preview the chosen design's system (its tokens ride along in the shared cache). */}
+          <form.Subscribe selector={(s) => s.values.designDocId}>
+            {(designDocId) => {
+              const doc = designDocId
+                ? designDocs.data?.find((d) => d.id === designDocId)
+                : undefined;
+              if (!doc?.designTokens) return null;
+              return (
+                <DesignSystemView
+                  sourceName={doc.sourceName}
+                  id={doc.id}
+                  tokens={doc.designTokens}
+                  feel={doc.designFeel}
+                />
+              );
+            }}
+          </form.Subscribe>
+
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="flex min-w-72 flex-1 flex-col gap-1.5">
+              <Label htmlFor="prompt">Prompt</Label>
+              <form.Field name="prompt">
+                {(field) => (
+                  <>
+                    <Textarea
+                      id="prompt"
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      onBlur={field.handleBlur}
+                      placeholder="e.g. a deck on the dosing, presentations and safety of the product"
+                    />
+                    <FieldError field={field} />
+                  </>
+                )}
+              </form.Field>
+            </div>
+            <form.Subscribe
+              selector={(s) => [s.canSubmit, s.isSubmitting] as const}
             >
-              {docs.length === 0 && (
-                <option value="">(none — extract one first)</option>
+              {([canSubmit, isSubmitting]) => (
+                <Button type="submit" disabled={!canSubmit || isSubmitting}>
+                  {isSubmitting ? "Generating…" : "Generate"}
+                </Button>
               )}
-              {docs.map((doc) => (
-                <option key={doc.id} value={doc.id}>
-                  {doc.sourceName} · {doc.id.slice(0, 8)}
-                </option>
-              ))}
-            </select>
+            </form.Subscribe>
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="design-doc">Design (optional)</Label>
-            <select
-              id="design-doc"
-              value={designDocId}
-              onChange={(e) => setDesignDocId(e.target.value)}
-              className="border-input bg-background h-9 min-w-56 rounded-md border px-3 text-sm"
-            >
-              <option value="">Default tokens</option>
-              {designDocs.map((doc) => (
-                <option key={doc.id} value={doc.id}>
-                  {doc.sourceName} · {doc.id.slice(0, 8)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex min-w-72 flex-1 flex-col gap-1.5">
-            <Label htmlFor="prompt">Prompt</Label>
-            <Input
-              id="prompt"
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="e.g. a deck on the dosing, presentations and safety of the product"
-            />
-          </div>
-          <Button
-            type="submit"
-            disabled={!contentDocId || !prompt.trim() || isGenerating}
-          >
-            {isGenerating ? "Generating…" : "Generate"}
-          </Button>
         </form>
 
         {topError && (
