@@ -21,7 +21,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import type { ISection } from "@/lib/extract/section";
-import type { ISlide } from "@/lib/slides/types";
+import type { ISlide, ITokens } from "@/lib/slides/types";
 import type { IGroundingReport, TSlidePlan } from "@/lib/ai/generate-schema";
 
 /** Which half of the two-PDF upload a document is: the content PDF or the design PDF. */
@@ -33,6 +33,11 @@ export const documents = pgTable("documents", {
   sourceName: text("source_name").notNull(),
   markdown: text("markdown").notNull(),
   sections: jsonb("sections").$type<Array<ISection>>().notNull(),
+  // Design-system extraction, cached per design PDF (only set for `role: 'design'`): the extracted
+  // Tokens (the design system) + a short qualitative feel note. Nullable — content docs never have
+  // them, and generation reads these back instead of re-extracting on every deck.
+  designTokens: jsonb("design_tokens").$type<ITokens>(),
+  designFeel: text("design_feel"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
