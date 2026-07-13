@@ -16,7 +16,12 @@
  * is unchanged, so the existing renderer/editor consume generated slides untouched.
  */
 import { z } from "zod";
-import type { ISlide, ISlideElement, TSlotRole } from "@/lib/slides/types";
+import type {
+  ISlide,
+  ISlideElement,
+  ITokens,
+  TSlotRole,
+} from "@/lib/slides/types";
 import type { TWireContent } from "@/lib/ai/content-patch";
 import { zContentPatch } from "@/lib/ai/content-patch";
 
@@ -89,24 +94,27 @@ export interface IWireSlide extends Omit<ISlide, "elements"> {
   elements: Array<IWireSlideElement>;
 }
 
-/** Client → server input: which stored content document to draw from, and the chat prompt. */
+/** Client → server input: which stored content document to draw from, the chat prompt, and an
+ *  optional design document whose extracted tokens style the deck (else the fallback tokens). */
 export const GenerateDeckInputSchema = z.object({
   contentDocId: z.string().uuid(),
   prompt: z.string().min(1).max(2000),
+  designDocId: z.string().uuid().optional(),
 });
 export type TGenerateDeckInput = z.input<typeof GenerateDeckInputSchema>;
 export type TGenerateDeckData = z.output<typeof GenerateDeckInputSchema>;
 
 /**
  * The streamed generation protocol. The server function yields these in order:
- *   `plan`  once (deck row created, N slides coming) → client renders N placeholders;
+ *   `plan`  once (deck row created, N slides coming, resolved design tokens) → client renders N
+ *           placeholders and styles the deck with those tokens;
  *   `slide` per finished+verified+persisted slide     → placeholder i becomes the real slide;
  *   `error` for a per-slide failure (deck continues) or a fatal one (then no more events);
  *   `done`  once at the end.
  * Every payload is plain JSON so it serializes across the server-fn boundary.
  */
 export type TGenerationEvent =
-  | { type: "plan"; deckId: string; plan: TSlidePlan }
+  | { type: "plan"; deckId: string; plan: TSlidePlan; tokens: ITokens }
   | {
       type: "slide";
       index: number;

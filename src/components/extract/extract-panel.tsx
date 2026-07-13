@@ -136,7 +136,48 @@ export function ExtractPanel() {
         </p>
       )}
 
-      {result?.ok && (
+      {result?.ok && result.designTokens && (
+        <div className="flex flex-col gap-3 rounded-md border p-4">
+          <h3 className="text-sm font-semibold">
+            Extracted design system{" "}
+            <span className="text-muted-foreground font-normal">
+              ({result.sourceName} · id {result.id.slice(0, 8)})
+            </span>
+          </h3>
+          <div className="flex flex-wrap gap-3">
+            {Object.entries(result.designTokens.colors).map(
+              ([colorRole, hex]) => (
+                <div key={colorRole} className="flex items-center gap-2">
+                  <span
+                    className="h-8 w-8 rounded border"
+                    style={{ background: hex }}
+                  />
+                  <span className="text-xs">
+                    <span className="font-medium">{colorRole}</span>
+                    <br />
+                    <code className="text-muted-foreground">{hex}</code>
+                  </span>
+                </div>
+              ),
+            )}
+          </div>
+          <div className="text-muted-foreground text-xs">
+            <p>
+              <span className="font-medium">display:</span>{" "}
+              {result.designTokens.fonts.display}
+            </p>
+            <p>
+              <span className="font-medium">body:</span>{" "}
+              {result.designTokens.fonts.body}
+            </p>
+            {result.designFeel && (
+              <p className="mt-1 italic">“{result.designFeel}”</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {result?.ok && !result.designTokens && (
         <div className="grid min-h-0 gap-6 lg:grid-cols-2">
           <div className="flex min-h-0 flex-col gap-2">
             <h3 className="text-sm font-semibold">

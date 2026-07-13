@@ -7,15 +7,20 @@
  * (never touching the slide model). When generation finishes, the deck is handed to the existing
  * {@link DeckView}, so generated slides render and edit through the unchanged renderer/editor.
  *
- * The design PDF upload is deferred: per the task, tokens/archetypes are the hardcoded set for
- * now (real design extraction swaps in behind the same interface next), so this wires the
- * content half — a stored content document + the prompt — into a streamed deck.
+ * A design document can be selected too: its extracted design system (fonts + palette) styles the
+ * deck. Generation resolves those tokens server-side and streams them on the plan event, so the
+ * previews and editor render with the real deck's look; with no design doc, the fallback tokens
+ * are used. Only the token SOURCE changes — the renderer/editor/archetypes are unchanged.
  */
 import { useEffect, useState } from "react";
 import type { IDeck, ISlide, ITokens } from "@/lib/slides";
 import type { IGroundingReport } from "@/lib/ai/generate-schema";
 import { DEMO_DECK, PHARMA_TOKENS } from "@/lib/slides";
-import { generateDeck, listRecentContentDocs } from "@/lib/ai/generate-deck";
+import {
+  generateDeck,
+  listRecentContentDocs,
+  listRecentDesignDocs,
+} from "@/lib/ai/generate-deck";
 import { DeckView } from "@/components/slides/deck-view";
 import { SlidePreview } from "@/components/slides/slide-preview";
 import { Badge } from "@/components/ui/badge";
@@ -81,27 +86,37 @@ function SlotCard({
 export function GeneratePanel() {
   const [docs, setDocs] = useState<Array<TContentDoc>>([]);
   const [contentDocId, setContentDocId] = useState("");
+  const [designDocs, setDesignDocs] = useState<Array<TContentDoc>>([]);
+  const [designDocId, setDesignDocId] = useState("");
   const [prompt, setPrompt] = useState("");
   const [status, setStatus] = useState<TStatus>("idle");
   const [topError, setTopError] = useState<string | null>(null);
   const [items, setItems] = useState<Array<TSlotState>>([]);
   const [doneDeck, setDoneDeck] = useState<IDeck | null>(null);
+  // The design tokens the deck is styled with — set from the plan event (the extracted design
+  // system), falling back to the placeholder tokens until then / when no design doc is chosen.
+  const [tokens, setTokens] = useState<ITokens>(PHARMA_TOKENS);
 
-  // Load recent content documents for the source picker.
+  // Load recent content + design documents for the pickers.
   useEffect(() => {
     let active = true;
     listRecentContentDocs()
       .then((res) => {
-        if (!active) return;
-        if (res.ok) {
-          setDocs(res.docs);
-          setContentDocId((prev) => prev || res.docs[0]?.id || "");
-        } else {
-          setTopError(res.error);
-        }
+        if (!active || !res.ok) return;
+        setDocs(res.docs);
+        setContentDocId((prev) => prev || res.docs[0]?.id || "");
       })
       .catch(() => {
         /* soft — the picker just stays empty */
+      });
+    listRecentDesignDocs()
+      .then((res) => {
+        if (!active || !res.ok) return;
+        setDesignDocs(res.docs);
+        setDesignDocId((prev) => prev || res.docs[0]?.id || "");
+      })
+      .catch(() => {
+        /* soft — design is optional; falls back to placeholder tokens */
       });
     return () => {
       active = false;
@@ -117,16 +132,22 @@ export function GeneratePanel() {
     setTopError(null);
     setDoneDeck(null);
     setItems([]);
+    setTokens(PHARMA_TOKENS);
 
     const readyByIndex = new Map<number, ISlide>();
     let sawDone = false;
 
     try {
       const events = await generateDeck({
-        data: { contentDocId, prompt: trimmed },
+        data: {
+          contentDocId,
+          prompt: trimmed,
+          designDocId: designDocId || undefined,
+        },
       });
       for await (const ev of events) {
         if (ev.type === "plan") {
+          setTokens(ev.tokens);
           setItems(
             ev.plan.slides.map((s) => ({ status: "pending", title: s.title })),
           );
@@ -212,6 +233,22 @@ export function GeneratePanel() {
               ))}
             </select>
           </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="design-doc">Design (optional)</Label>
+            <select
+              id="design-doc"
+              value={designDocId}
+              onChange={(e) => setDesignDocId(e.target.value)}
+              className="border-input bg-background h-9 min-w-56 rounded-md border px-3 text-sm"
+            >
+              <option value="">Default tokens</option>
+              {designDocs.map((doc) => (
+                <option key={doc.id} value={doc.id}>
+                  {doc.sourceName} · {doc.id.slice(0, 8)}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="flex min-w-72 flex-1 flex-col gap-1.5">
             <Label htmlFor="prompt">Prompt</Label>
             <Input
@@ -247,12 +284,7 @@ export function GeneratePanel() {
         {items.length > 0 && (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {items.map((state, i) => (
-              <SlotCard
-                key={i}
-                index={i}
-                state={state}
-                tokens={PHARMA_TOKENS}
-              />
+              <SlotCard key={i} index={i} state={state} tokens={tokens} />
             ))}
           </div>
         )}
@@ -261,11 +293,7 @@ export function GeneratePanel() {
       {/* During generation the progressive grid is the view; otherwise the full editor. Keyed by
           deck id so the editor mounts fresh when a generated deck replaces the placeholder. */}
       {!isGenerating && (
-        <DeckView
-          key={editorDeck.id}
-          deck={editorDeck}
-          tokens={PHARMA_TOKENS}
-        />
+        <DeckView key={editorDeck.id} deck={editorDeck} tokens={tokens} />
       )}
     </div>
   );
