@@ -1,9 +1,10 @@
 /**
  * `generateDeck` — the TanStack Start server function behind generation. It is the ORCHESTRATOR:
- * the model only plans and fills; this code owns the loop (plan → for each slide: pick archetype
- * → fill → verify with bounded retry → persist → stream). No agent, no durable-execution engine —
- * a plain async generator that yields one {@link TGenerationEvent} per step, so slides paint
- * progressively (slide 1 renders while slide 2 is still generating).
+ * the model only plans and fills; this code owns the loop (plan → then, per slide: pick archetype
+ * → fill → verify with bounded retry → persist). No agent, no durable-execution engine — a plain
+ * async generator. Slides are generated with bounded concurrency ({@link GENERATE_CONCURRENCY} in
+ * flight) and each is streamed the moment it completes, so slides paint progressively as they land
+ * (out of submission order — the client places each by its `index`).
  *
  * Robustness mirrors the edit/extract seams: the generator never throws to the client. A missing
  * key, a bad document id, a DB error, or a per-slide failure all become `error` events; the deck
@@ -35,9 +36,13 @@ import { describeFitIssues, verifySlideFit } from "@/lib/ai/fit";
 import { selectSections, summarizeSections } from "@/lib/ai/sections";
 import { describeGroundingIssues } from "@/lib/ai/generate-prompt";
 import { fatalProviderMessage, isFatalProviderError } from "@/lib/ai/retry";
+import { runWithConcurrency } from "@/lib/ai/concurrency";
 
 /** Retry budget for an ungrounded slide. Bounded — never loops unbounded (spec). */
 const MAX_FILL_RETRIES = 1;
+
+/** Max slide fills in flight at once. Caps parallelism to stay well under provider rate limits. */
+const GENERATE_CONCURRENCY = 5;
 
 type TDb = ReturnType<typeof getDb>;
 
@@ -163,6 +168,49 @@ async function buildOneSlide(args: {
   return { slide, grounding };
 }
 
+/** The result of one slide task — a finished slide, a per-slide failure, or a fatal wall. */
+type TSlideOutcome =
+  | {
+      kind: "slide";
+      index: number;
+      slide: IWireSlide;
+      grounding: IGroundingReport;
+    }
+  | { kind: "error"; index: number; message: string }
+  | { kind: "fatal"; message: string };
+
+/**
+ * Build + persist one slide, classified into a {@link TSlideOutcome}. Total (never throws) so it
+ * is safe to run many of these concurrently — a per-slide failure becomes data, and a fatal
+ * provider wall (quota/auth) is tagged so the orchestrator can stop the whole deck once.
+ */
+async function generateSlideTask(
+  db: TDb,
+  deckId: string,
+  index: number,
+  item: TSlidePlanItem,
+  doc: { markdown: string; sections: Array<ISection> },
+): Promise<TSlideOutcome> {
+  try {
+    const sections = selectSections(doc.sections, item.sectionIds);
+    const archetypeId = pickArchetype(item, sections, ARCHETYPES);
+    const { slide, grounding } = await buildOneSlide({
+      slideId: `${deckId}-s${index + 1}`,
+      item,
+      sections,
+      archetypeId,
+      markdown: doc.markdown,
+    });
+    await persistSlide(db, deckId, index, slide, grounding);
+    return { kind: "slide", index, slide, grounding };
+  } catch (error) {
+    if (isFatalProviderError(error)) {
+      return { kind: "fatal", message: fatalProviderMessage(error) };
+    }
+    return { kind: "error", index, message: errorMessage(error) };
+  }
+}
+
 export const generateDeck = createServerFn({ method: "POST" })
   .validator((input: TGenerateDeckInput) =>
     GenerateDeckInputSchema.parse(input),
@@ -218,28 +266,30 @@ export const generateDeck = createServerFn({ method: "POST" })
     }
     yield { type: "plan", deckId, plan };
 
-    for (let i = 0; i < plan.slides.length; i++) {
-      const item = plan.slides[i];
-      const slideId = `${deckId}-s${i + 1}`;
-      try {
-        const sections = selectSections(doc.sections, item.sectionIds);
-        const archetypeId = pickArchetype(item, sections, ARCHETYPES);
-        const { slide, grounding } = await buildOneSlide({
-          slideId,
-          item,
-          sections,
-          archetypeId,
-          markdown: doc.markdown,
-        });
-        await persistSlide(db, deckId, i, slide, grounding);
-        yield { type: "slide", index: i, slide, grounding };
-      } catch (error) {
-        // A quota/auth wall hits every remaining slide identically — surface it once and stop.
-        if (isFatalProviderError(error)) {
-          yield { type: "error", message: fatalProviderMessage(error) };
-          return;
-        }
-        yield { type: "error", index: i, message: errorMessage(error) };
+    // Generate the slides with bounded concurrency (up to GENERATE_CONCURRENCY in flight), emitting
+    // each as it completes. The tasks are total, so the pool never throws; a fatal provider wall
+    // hits every slide the same way, so surface it once and stop launching more.
+    const tasks = plan.slides.map(
+      (item, index) => () => generateSlideTask(db, deckId, index, item, doc),
+    );
+
+    for await (const outcome of runWithConcurrency(
+      tasks,
+      GENERATE_CONCURRENCY,
+    )) {
+      if (outcome.kind === "fatal") {
+        yield { type: "error", message: outcome.message };
+        return;
+      }
+      if (outcome.kind === "slide") {
+        yield {
+          type: "slide",
+          index: outcome.index,
+          slide: outcome.slide,
+          grounding: outcome.grounding,
+        };
+      } else {
+        yield { type: "error", index: outcome.index, message: outcome.message };
       }
     }
 
