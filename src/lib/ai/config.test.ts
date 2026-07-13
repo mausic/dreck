@@ -32,16 +32,16 @@ describe("generation config", () => {
     expect(fitCharWidthRatio()).toBeCloseTo(0.6);
   });
 
-  it("clamps out-of-range values into the safe band", () => {
+  it("falls back to the default on an out-of-range value", () => {
     process.env.GENERATE_CONCURRENCY = "999";
-    expect(generationConcurrency()).toBe(16);
+    expect(generationConcurrency()).toBe(5);
     process.env.GENERATE_CONCURRENCY = "0";
-    expect(generationConcurrency()).toBe(1);
+    expect(generationConcurrency()).toBe(5);
   });
 
-  it("truncates non-integers where an integer is required", () => {
+  it("falls back to the default when an integer knob gets a non-integer", () => {
     process.env.GENERATE_FILL_RETRIES = "2.9";
-    expect(fillRetryBudget()).toBe(2);
+    expect(fillRetryBudget()).toBe(1);
   });
 
   it("ignores garbage and blank values, keeping the default", () => {
