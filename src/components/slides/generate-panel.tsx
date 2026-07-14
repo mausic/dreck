@@ -378,7 +378,10 @@ export function GeneratePanel() {
           </p>
         )}
 
-        {items.length > 0 && (
+        {/* The progressive grid is the live view WHILE generating (and stays on error so per-slide
+            failures remain visible). Once a deck finishes it collapses — the full editor below is
+            the deck's single preview from then on. */}
+        {items.length > 0 && status !== "done" && (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {items.map((state, i) => (
               <SlotCard key={i} index={i} state={state} tokens={tokens} />
@@ -387,8 +390,8 @@ export function GeneratePanel() {
         )}
       </section>
 
-      {/* During generation the progressive grid is the view; otherwise the full editor. Keyed by
-          deck id so the editor mounts fresh when a generated deck replaces the placeholder. */}
+      {/* Once done, the full editor is the deck's only preview. Keyed by deck id so the editor
+          mounts fresh when a generated deck replaces the placeholder. */}
       {!isGenerating && editorDeck && (
         <DeckView key={editorDeck.id} deck={editorDeck} tokens={tokens} />
       )}
