@@ -8,6 +8,11 @@ const srcDir = fileURLToPath(new URL("./src", import.meta.url));
 
 export default defineConfig({
   test: {
+    env: {
+      DATABASE_URL: "postgresql://neondb_owner:",
+      GOOGLE_GENERATIVE_AI_API_KEY: "test-google-api-key",
+      MISTRAL_API_KEY: "test-mistral-api-key",
+    },
     environment: "jsdom",
   },
   resolve: {

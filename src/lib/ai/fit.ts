@@ -1,0 +1,287 @@
+/**
+ * Deterministic text-fit estimation for slide slots.
+ *
+ * Slide elements render into fixed canonical boxes with `overflow: hidden`, so text that is too
+ * long clips mid-word. There's no layout engine server-side, so this module APPROXIMATES fit
+ * from font metrics (read off the resolved style preset): glyph advance ≈ `fontSize × RATIO`
+ * (+ letter-spacing), and a line ≈ `fontSize × lineHeight` tall. From that it derives, per slot,
+ * a character budget (fed into the fill prompt so the model writes to length) and a fit check
+ * (run after fill so an overflowing slide can be regenerated — same verify→retry pattern as
+ * grounding). The estimate is intentionally lenient (the `GENERATE_FIT_TOLERANCE` knob) so only
+ * clear overflow triggers a regenerate. Ratio/tolerance are env-tunable if budgets feel off.
+ */
+import type { CSSProperties } from "react";
+import type {
+  ISlide,
+  ISlideElement,
+  ISlot,
+  TSlotContent,
+  TSlotRole,
+} from "@/lib/slides/types";
+import { resolveStyle } from "@/lib/slides/styles";
+import { isLabelValue, isPanelContent } from "@/lib/slides/content";
+import { getConfig } from "@/lib/config";
+
+// The two calibration tunables — glyph-width ratio and overflow tolerance — are env-configurable
+// (see config.ts); read on use so a deploy can retune without a code change.
+/** Uppercase runs a touch wider; added to the ratio for `text-transform: uppercase` slots. */
+const UPPERCASE_EXTRA = 0.06;
+const DEFAULT_LINE_HEIGHT = 1.25;
+const DEFAULT_FONT_SIZE = 24;
+
+// Panel content is nested (heading + body) with its own sizes — mirror styles.ts `sidebarPanel`
+// padding and slide-element.tsx `PanelBlock`.
+const PANEL_PAD_X = 46;
+const PANEL_PAD_Y = 44;
+const PANEL_GAP = 18;
+const PANEL_HEADING_FS = 34;
+const PANEL_HEADING_LH = 1.15;
+const PANEL_HEADING_LINES = 2;
+const PANEL_BODY_FS = 22;
+const PANEL_BODY_LH = 1.5;
+
+/** Estimated room in a box: how many characters per line and how many lines fit. */
+export interface ICapacity {
+  charsPerLine: number;
+  maxLines: number;
+  maxChars: number;
+}
+
+function numeric(value: unknown, fallback: number): number {
+  return typeof value === "number" ? value : fallback;
+}
+
+/** Letter-spacing (`"0.32em"` / `"1px"` / number) as pixels for the given font size. */
+function letterSpacingPx(
+  value: CSSProperties["letterSpacing"],
+  fontSize: number,
+): number {
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const match = value.match(/^(-?[\d.]+)(em|px)?$/);
+    if (match) {
+      const n = Number.parseFloat(match[1]);
+      return match[2] === "px" ? n : n * fontSize;
+    }
+  }
+  return 0;
+}
+
+function glyphWidth(fontSize: number, style: CSSProperties): number {
+  const generationConfig = getConfig().generation;
+  const ratio = generationConfig.GENERATE_FIT_CHAR_RATIO;
+  const upper = style.textTransform === "uppercase" ? UPPERCASE_EXTRA : 0;
+  return (
+    fontSize * (ratio + upper) + letterSpacingPx(style.letterSpacing, fontSize)
+  );
+}
+
+function charsPerLine(
+  widthPx: number,
+  fontSize: number,
+  style: CSSProperties,
+): number {
+  return Math.max(1, Math.floor(widthPx / glyphWidth(fontSize, style)));
+}
+
+function linesForHeight(
+  heightPx: number,
+  fontSize: number,
+  lineHeight: number,
+): number {
+  return Math.max(1, Math.floor(heightPx / (fontSize * lineHeight)));
+}
+
+/** Capacity of a plain text slot, from its resolved style + box. `tableRow` is one line. */
+function textCapacity(
+  role: TSlotRole,
+  styleRef: string,
+  w: number,
+  h: number,
+): ICapacity {
+  const style = resolveStyle(styleRef);
+  const fontSize = numeric(style.fontSize, DEFAULT_FONT_SIZE);
+  const lineHeight = numeric(style.lineHeight, DEFAULT_LINE_HEIGHT);
+  const cpl = charsPerLine(w, fontSize, style);
+  const maxLines =
+    role === "tableRow" ? 1 : linesForHeight(h, fontSize, lineHeight);
+  return { charsPerLine: cpl, maxLines, maxChars: cpl * maxLines };
+}
+
+/** Capacity of a panel's heading + body sub-regions (nested content, own sizes). */
+function panelCapacity(
+  w: number,
+  h: number,
+): {
+  heading: ICapacity;
+  body: ICapacity;
+} {
+  const generationConfig = getConfig().generation;
+  const ratio = generationConfig.GENERATE_FIT_CHAR_RATIO;
+  const innerW = Math.max(1, w - 2 * PANEL_PAD_X);
+  const innerH = Math.max(1, h - 2 * PANEL_PAD_Y);
+  const headingCpl = Math.max(
+    1,
+    Math.floor(innerW / (PANEL_HEADING_FS * ratio)),
+  );
+  const usedByHeading =
+    PANEL_HEADING_LINES * PANEL_HEADING_FS * PANEL_HEADING_LH + PANEL_GAP;
+  const bodyH = Math.max(PANEL_BODY_FS, innerH - usedByHeading);
+  const bodyCpl = Math.max(1, Math.floor(innerW / (PANEL_BODY_FS * ratio)));
+  const bodyLines = Math.max(
+    1,
+    Math.floor(bodyH / (PANEL_BODY_FS * PANEL_BODY_LH)),
+  );
+  return {
+    heading: {
+      charsPerLine: headingCpl,
+      maxLines: PANEL_HEADING_LINES,
+      maxChars: headingCpl * PANEL_HEADING_LINES,
+    },
+    body: {
+      charsPerLine: bodyCpl,
+      maxLines: bodyLines,
+      maxChars: bodyCpl * bodyLines,
+    },
+  };
+}
+
+/** Estimated lines a string occupies at the given per-line width (wrapping by char count). */
+function linesForText(text: string, cpl: number): number {
+  return Math.max(1, Math.ceil(text.trim().length / cpl));
+}
+
+/** Estimated lines a slot's content occupies (explicit line breaks + wrapping). */
+function linesUsed(content: TSlotContent, cpl: number): number {
+  if (typeof content === "string") return linesForText(content, cpl);
+  if (Array.isArray(content))
+    return content.reduce((sum, line) => sum + linesForText(line, cpl), 0);
+  if (isLabelValue(content))
+    return linesForText(`${content.label}   ${content.value}`, cpl);
+  return 1;
+}
+
+/**
+ * A human-readable character budget for one slot, for the fill prompt (so the model writes to
+ * length). Panels get a heading + body budget; table rows a combined budget; text a total.
+ */
+export function slotCharBudget(slot: ISlot): string {
+  if (slot.role === "panel") {
+    const { heading, body } = panelCapacity(slot.w, slot.h);
+    return `heading ≤${heading.maxChars} chars, body ≤${body.maxChars} chars`;
+  }
+  const cap = textCapacity(slot.role, slot.styleRef, slot.w, slot.h);
+  if (slot.role === "tableRow")
+    return `label + value ≤${cap.maxChars} chars total`;
+  return cap.maxLines > 1
+    ? `≤${cap.maxChars} chars (≈${cap.maxLines} lines)`
+    : `≤${cap.maxChars} chars (one line)`;
+}
+
+/** One element whose text is estimated to overflow its box. */
+export interface IFitIssue {
+  elementId: string;
+  slotId: string;
+  role: TSlotRole;
+  /** Which sub-region overflowed, for panels. */
+  part?: "heading" | "body";
+  chars: number;
+  maxChars: number;
+}
+
+/** The fit step's report for one slide. `ok` means nothing is estimated to overflow. */
+export interface IFitReport {
+  ok: boolean;
+  issues: Array<IFitIssue>;
+}
+
+function overflows(usedLines: number, maxLines: number): boolean {
+  const generationConfig = getConfig().generation;
+  return usedLines > maxLines * generationConfig.GENERATE_FIT_TOLERANCE;
+}
+
+function checkElement(element: ISlideElement, issues: Array<IFitIssue>): void {
+  const { content } = element;
+
+  if (element.role === "panel") {
+    if (!isPanelContent(content)) return;
+    const cap = panelCapacity(element.w, element.h);
+    if (
+      overflows(
+        linesForText(content.heading, cap.heading.charsPerLine),
+        cap.heading.maxLines,
+      )
+    ) {
+      issues.push({
+        elementId: element.id,
+        slotId: element.slotId,
+        role: element.role,
+        part: "heading",
+        chars: content.heading.length,
+        maxChars: cap.heading.maxChars,
+      });
+    }
+    if (
+      overflows(
+        linesForText(content.body, cap.body.charsPerLine),
+        cap.body.maxLines,
+      )
+    ) {
+      issues.push({
+        elementId: element.id,
+        slotId: element.slotId,
+        role: element.role,
+        part: "body",
+        chars: content.body.length,
+        maxChars: cap.body.maxChars,
+      });
+    }
+    return;
+  }
+
+  const cap = textCapacity(
+    element.role,
+    element.styleRef,
+    element.w,
+    element.h,
+  );
+  if (overflows(linesUsed(content, cap.charsPerLine), cap.maxLines)) {
+    const chars =
+      typeof content === "string"
+        ? content.length
+        : Array.isArray(content)
+          ? content.join(" ").length
+          : isLabelValue(content)
+            ? content.label.length + content.value.length
+            : 0;
+    issues.push({
+      elementId: element.id,
+      slotId: element.slotId,
+      role: element.role,
+      chars,
+      maxChars: cap.maxChars,
+    });
+  }
+}
+
+/**
+ * Estimate whether every element's text fits its box. Returns the overflowing slots (with their
+ * char count vs budget). Pure and model-free — cheap to run on every fill + retry.
+ */
+export function verifySlideFit(slide: ISlide): IFitReport {
+  const issues: Array<IFitIssue> = [];
+  for (const element of slide.elements) checkElement(element, issues);
+  return { ok: issues.length === 0, issues };
+}
+
+/** Render fit issues into a short note the retry pass can act on (keyed by slot id). */
+export function describeFitIssues(issues: Array<IFitIssue>): string {
+  return issues
+    .map((issue) => {
+      const where = issue.part
+        ? `slot '${issue.slotId}' ${issue.part}`
+        : `slot '${issue.slotId}'`;
+      return `${where} (${issue.chars} chars) must be ≤ ~${issue.maxChars} chars`;
+    })
+    .join("; ");
+}

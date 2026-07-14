@@ -21,6 +21,46 @@ export const STYLE_REF = {
   sidebarRow: "sidebar/row",
   sidebarPanel: "sidebar/panel",
   sidebarFooter: "sidebar/footer",
+
+  // — Shared white-stage header (card-grid / two-column / stat) —
+  contentEyebrow: "content/eyebrow",
+  contentHeading: "content/heading",
+  contentIntro: "content/intro",
+  contentFooter: "content/footer",
+
+  // — Card grid —
+  cardBg: "card/bg",
+  cardTitle: "card/title",
+  cardValue: "card/value",
+  cardDesc: "card/desc",
+
+  // — Two column —
+  twoColLeftList: "twocol/left-list",
+  twoColRightLabel: "twocol/right-label",
+  twoColRightBody: "twocol/right-body",
+
+  // — Stat —
+  statFigure: "stat/figure",
+  statLabel: "stat/label",
+  statCaption: "stat/caption",
+
+  // — Section divider —
+  dividerBg: "divider/bg",
+  dividerEyebrow: "divider/eyebrow",
+  dividerTitle: "divider/title",
+  dividerRule: "divider/rule",
+
+  // — Callout —
+  calloutEyebrow: "callout/eyebrow",
+  calloutRule: "callout/rule",
+  calloutQuote: "callout/quote",
+  calloutAttribution: "callout/attribution",
+
+  // — Table + sidebar: structured stat panel (replaces the lone-paragraph panel) —
+  sidebarPanelBg: "sidebar/panel-bg",
+  sidebarPanelLabel: "sidebar/panel-label",
+  sidebarPanelFigure: "sidebar/panel-figure",
+  sidebarPanelCaption: "sidebar/panel-caption",
 } as const;
 
 const STYLE_PRESETS: Record<string, CSSProperties> = {
@@ -122,6 +162,231 @@ const STYLE_PRESETS: Record<string, CSSProperties> = {
     fontSize: 18,
     letterSpacing: "0.04em",
     color: "var(--slide-text-muted)",
+  },
+
+  // — Shared white-stage header (card-grid / two-column / stat) —
+  [STYLE_REF.contentEyebrow]: {
+    display: "flex",
+    alignItems: "center",
+    fontFamily: "var(--slide-font-body)",
+    fontWeight: 600,
+    fontSize: 20,
+    letterSpacing: "0.28em",
+    textTransform: "uppercase",
+    color: "var(--slide-accent)",
+  },
+  [STYLE_REF.contentHeading]: {
+    display: "flex",
+    alignItems: "flex-start",
+    fontFamily: "var(--slide-font-display)",
+    fontWeight: 800,
+    fontSize: 52,
+    lineHeight: 1.06,
+    letterSpacing: "-0.015em",
+    color: "var(--slide-primary)",
+  },
+  [STYLE_REF.contentIntro]: {
+    display: "flex",
+    fontFamily: "var(--slide-font-body)",
+    fontSize: 26,
+    lineHeight: 1.45,
+    color: "var(--slide-text-muted)",
+  },
+  [STYLE_REF.contentFooter]: {
+    display: "flex",
+    alignItems: "center",
+    fontFamily: "var(--slide-font-body)",
+    fontSize: 18,
+    letterSpacing: "0.04em",
+    color: "var(--slide-text-muted)",
+  },
+
+  // — Card grid: a surface card holding title / figure / description —
+  [STYLE_REF.cardBg]: {
+    background: "var(--slide-surface)",
+    borderRadius: 16,
+    border:
+      "1px solid color-mix(in srgb, var(--slide-text-muted), var(--slide-white) 62%)",
+  },
+  [STYLE_REF.cardTitle]: {
+    display: "flex",
+    alignItems: "flex-start",
+    fontFamily: "var(--slide-font-display)",
+    fontWeight: 700,
+    fontSize: 26,
+    lineHeight: 1.15,
+    color: "var(--slide-primary)",
+  },
+  [STYLE_REF.cardValue]: {
+    display: "flex",
+    alignItems: "flex-end",
+    fontFamily: "var(--slide-font-display)",
+    fontWeight: 800,
+    fontSize: 36,
+    lineHeight: 1.05,
+    letterSpacing: "-0.01em",
+    color: "var(--slide-accent)",
+  },
+  [STYLE_REF.cardDesc]: {
+    display: "flex",
+    fontFamily: "var(--slide-font-body)",
+    fontSize: 20,
+    lineHeight: 1.45,
+    color: "var(--slide-text-muted)",
+  },
+
+  // — Two column: accent-border list (left) + prose/secondary list (right) —
+  [STYLE_REF.twoColLeftList]: {
+    display: "flex",
+    fontFamily: "var(--slide-font-body)",
+    fontSize: 26,
+    lineHeight: 1.9,
+    color: "var(--slide-text-dark)",
+    borderLeft: "4px solid var(--slide-accent)",
+    paddingLeft: 28,
+  },
+  [STYLE_REF.twoColRightLabel]: {
+    display: "flex",
+    alignItems: "center",
+    fontFamily: "var(--slide-font-body)",
+    fontWeight: 700,
+    fontSize: 18,
+    letterSpacing: "0.18em",
+    textTransform: "uppercase",
+    color: "var(--slide-primary)",
+  },
+  [STYLE_REF.twoColRightBody]: {
+    display: "flex",
+    fontFamily: "var(--slide-font-body)",
+    fontSize: 24,
+    lineHeight: 1.55,
+    color: "var(--slide-text-dark)",
+  },
+
+  // — Stat: one to three large metric figures with labels —
+  [STYLE_REF.statFigure]: {
+    display: "flex",
+    alignItems: "flex-end",
+    fontFamily: "var(--slide-font-display)",
+    fontWeight: 800,
+    fontSize: 104,
+    lineHeight: 1,
+    letterSpacing: "-0.02em",
+    color: "var(--slide-accent)",
+  },
+  [STYLE_REF.statLabel]: {
+    display: "flex",
+    alignItems: "center",
+    fontFamily: "var(--slide-font-body)",
+    fontWeight: 700,
+    fontSize: 22,
+    letterSpacing: "0.16em",
+    textTransform: "uppercase",
+    color: "var(--slide-primary)",
+  },
+  [STYLE_REF.statCaption]: {
+    display: "flex",
+    fontFamily: "var(--slide-font-body)",
+    fontSize: 20,
+    lineHeight: 1.45,
+    color: "var(--slide-text-muted)",
+  },
+
+  // — Section divider: minimal, light surface stage with a big navy title —
+  [STYLE_REF.dividerBg]: {
+    background: "var(--slide-surface)",
+  },
+  [STYLE_REF.dividerEyebrow]: {
+    display: "flex",
+    alignItems: "flex-end",
+    fontFamily: "var(--slide-font-body)",
+    fontWeight: 700,
+    fontSize: 24,
+    letterSpacing: "0.3em",
+    textTransform: "uppercase",
+    color: "var(--slide-accent)",
+  },
+  [STYLE_REF.dividerTitle]: {
+    display: "flex",
+    alignItems: "flex-start",
+    fontFamily: "var(--slide-font-display)",
+    fontWeight: 800,
+    fontSize: 92,
+    lineHeight: 1.02,
+    letterSpacing: "-0.02em",
+    color: "var(--slide-primary)",
+  },
+  [STYLE_REF.dividerRule]: {
+    background: "var(--slide-accent)",
+    borderRadius: 999,
+  },
+
+  // — Callout: a prominent statement/quote + attribution —
+  [STYLE_REF.calloutEyebrow]: {
+    display: "flex",
+    alignItems: "center",
+    fontFamily: "var(--slide-font-body)",
+    fontWeight: 600,
+    fontSize: 20,
+    letterSpacing: "0.28em",
+    textTransform: "uppercase",
+    color: "var(--slide-accent)",
+  },
+  [STYLE_REF.calloutRule]: {
+    background: "var(--slide-accent)",
+    borderRadius: 999,
+  },
+  [STYLE_REF.calloutQuote]: {
+    display: "flex",
+    alignItems: "flex-start",
+    fontFamily: "var(--slide-font-display)",
+    fontWeight: 700,
+    fontSize: 52,
+    lineHeight: 1.25,
+    letterSpacing: "-0.01em",
+    color: "var(--slide-primary)",
+  },
+  [STYLE_REF.calloutAttribution]: {
+    display: "flex",
+    alignItems: "center",
+    fontFamily: "var(--slide-font-body)",
+    fontWeight: 600,
+    fontSize: 24,
+    color: "var(--slide-text-muted)",
+  },
+
+  // — Table + sidebar: structured stat panel on the primary stage —
+  [STYLE_REF.sidebarPanelBg]: {
+    background: "var(--slide-primary)",
+    borderRadius: 18,
+  },
+  [STYLE_REF.sidebarPanelLabel]: {
+    display: "flex",
+    alignItems: "center",
+    fontFamily: "var(--slide-font-body)",
+    fontWeight: 600,
+    fontSize: 20,
+    letterSpacing: "0.24em",
+    textTransform: "uppercase",
+    color: "color-mix(in srgb, var(--slide-accent), var(--slide-white) 55%)",
+  },
+  [STYLE_REF.sidebarPanelFigure]: {
+    display: "flex",
+    alignItems: "flex-start",
+    fontFamily: "var(--slide-font-display)",
+    fontWeight: 800,
+    fontSize: 84,
+    lineHeight: 1.02,
+    letterSpacing: "-0.02em",
+    color: "var(--slide-white)",
+  },
+  [STYLE_REF.sidebarPanelCaption]: {
+    display: "flex",
+    fontFamily: "var(--slide-font-body)",
+    fontSize: 22,
+    lineHeight: 1.5,
+    color: "var(--slide-white)",
+    opacity: 0.8,
   },
 };
 

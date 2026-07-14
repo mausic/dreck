@@ -15,7 +15,7 @@ export const EDIT_PROMPT_VERSION = "edit/v1";
  * preserve shape, invent nothing) and the output vocabulary (the `kind`-tagged content
  * the {@link EditPatchSchema} expects).
  */
-export const EDIT_SYSTEM_PROMPT = `You are a precise copy editor for a corporate pharmaceutical slide deck.
+export const EDIT_SYSTEM_PROMPT = `You are a precise copy editor for a corporate slide deck.
 
 You are given one or more selected slide elements (each with an id, a role, its content shape, and its current content), the user's edit instruction, read-only text from the rest of the slide for context, and the deck's design tokens.
 

@@ -1,13 +1,17 @@
 /**
- * `extractDocument` — the TanStack Start server function behind Task 4's two stages.
+ * `extractDocument` — the TanStack Start server function behind extraction, branching by role.
  *
- * Stage 1: PDF (base64) → faithful markdown via the Mistral doc API (`pdfToMarkdown`).
- * Stage 2: markdown → generic section tree, deterministically (`parseSections`).
- * Then persist both to `documents` (markdown as the source of truth) and echo them back.
+ * CONTENT PDF (the reference): Stage 1 — PDF → faithful markdown via the Mistral doc API
+ * (`pdfToMarkdown`); Stage 2 — markdown → generic section tree deterministically (`parseSections`).
+ * Both persist to `documents` (markdown as the durable source of truth) and echo back.
  *
- * The provider/DB keys stay server-side. The handler never throws to the client: a missing
- * key, an OCR failure, or a DB error all resolve to `{ ok: false }`. Because this backs a
- * debug view, the real error message is surfaced rather than a generic one.
+ * DESIGN PDF (the style template): no OCR — its words are discarded. Instead `extractDesignSystem`
+ * derives the {@link import("@/lib/slides").ITokens} (fonts deterministic, colors via the model
+ * reading the PDF) and caches them on the row, so generation reads them back without re-extracting.
+ *
+ * The provider/DB keys stay server-side. The handler never throws to the client: a missing key, an
+ * OCR/extraction failure, or a DB error all resolve to `{ ok: false }`. Because this backs a debug
+ * view, the real error message is surfaced rather than a generic one.
  */
 import { createServerFn } from "@tanstack/react-start";
 import type {
@@ -18,7 +22,16 @@ import { getDb } from "@/db/client";
 import { documents } from "@/db/schema";
 import { pdfToMarkdown } from "@/lib/extract/mistral";
 import { parseSections } from "@/lib/extract/parse-markdown";
+import { extractDesignSystem } from "@/lib/extract/design-system";
 import { ExtractDocumentInputSchema } from "@/lib/extract/extract-schema";
+
+/** Decode a base64 payload (no `data:` prefix) to bytes. `atob` is available on Workers. */
+function base64ToBytes(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
 
 export const extractDocument = createServerFn({ method: "POST" })
   .validator((input: TExtractDocumentInput) =>
@@ -26,16 +39,45 @@ export const extractDocument = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }): Promise<TExtractDocumentResult> => {
     try {
-      // Stage 1 — table-aware markdown, kept verbatim as the source of truth.
-      const markdown = await pdfToMarkdown(data.pdfBase64);
-      // Stage 2 — deterministic, faithful section tree (no LLM rewriting).
-      const sections = parseSections(markdown);
-
       const db = getDb();
+
+      if (data.role === "design") {
+        // Design deck → tokens only (fonts deterministic, colors via model). No OCR: the design
+        // deck's words are never used, so markdown/sections are stored empty.
+        const { tokens, feel } = await extractDesignSystem(
+          base64ToBytes(data.pdfBase64),
+        );
+        const [row] = await db
+          .insert(documents)
+          .values({
+            role: "design",
+            sourceName: data.sourceName,
+            markdown: "",
+            sections: [],
+            designTokens: tokens,
+            designFeel: feel,
+          })
+          .returning({ id: documents.id });
+
+        return {
+          ok: true,
+          id: row.id,
+          role: "design",
+          sourceName: data.sourceName,
+          markdown: "",
+          sections: [],
+          designTokens: tokens,
+          designFeel: feel,
+        };
+      }
+
+      // Content deck → table-aware markdown (source of truth) + deterministic section tree.
+      const markdown = await pdfToMarkdown(data.pdfBase64);
+      const sections = parseSections(markdown);
       const [row] = await db
         .insert(documents)
         .values({
-          role: data.role,
+          role: "content",
           sourceName: data.sourceName,
           markdown,
           sections,
@@ -45,7 +87,7 @@ export const extractDocument = createServerFn({ method: "POST" })
       return {
         ok: true,
         id: row.id,
-        role: data.role,
+        role: "content",
         sourceName: data.sourceName,
         markdown,
         sections,
