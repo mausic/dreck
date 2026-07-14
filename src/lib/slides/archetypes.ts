@@ -2,13 +2,24 @@ import type { IArchetype, ISlot } from "@/lib/slides/types";
 import { STYLE_REF } from "@/lib/slides/styles";
 
 /**
- * Reusable layout skeletons. Two are fully defined here (`title`, `table-sidebar`)
- * with real slot geometry in canonical 1440×810 units — enough to prove the renderer
- * generalizes across visibly distinct archetypes. `card-grid` / `two-column` (spec §6)
- * are intentionally deferred to a later task.
+ * Reusable layout skeletons, hand-authored as data (slots + canonical geometry) and styled
+ * entirely by the extracted design tokens via `styleRef` → CSS presets. The set is deliberately
+ * varied in COMPOSITION — some full-width, some with a structured panel, some metric-led — so a
+ * generated deck can pick a layout that fits each slide's content shape instead of collapsing
+ * into one archetype (see `pick-archetype.ts`).
  *
- * All geometry below is CANONICAL. Nothing here knows about rendered pixels.
+ * All geometry below is CANONICAL (1440×810 units). Nothing here knows about rendered pixels,
+ * and every archetype is just more slots feeding the same flat slide model — so new archetypes
+ * render and are region-editable through the existing renderer/editor with no downstream change.
+ *
+ * `card-grid` and `stat` come in count variants (2–4 cards, 1–3 figures): the selector resolves
+ * the concrete variant from how many parallel items / metrics the content actually has, so a card
+ * or figure is never left empty.
  */
+
+/** Canonical content margins shared by the white-stage archetypes. */
+const MARGIN = 96;
+const CONTENT_W = 1440 - MARGIN * 2; // 1248
 
 /** Title slide: full-bleed navy, eyebrow + big title + short rule + subtitle + footer. */
 const titleArchetype: IArchetype = {
@@ -81,6 +92,324 @@ const titleArchetype: IArchetype = {
   ],
 };
 
+/**
+ * Shared white-stage header (eyebrow + heading, optional intro, footer) reused by the content
+ * archetypes so their headers line up. Slots come first in the archetype so later body slots
+ * paint above them (though they never overlap).
+ */
+function whiteHeader(opts: { intro: boolean }): Array<ISlot> {
+  const slots: Array<ISlot> = [
+    {
+      id: "eyebrow",
+      role: "eyebrow",
+      x: MARGIN,
+      y: 84,
+      w: 1000,
+      h: 30,
+      styleRef: STYLE_REF.contentEyebrow,
+    },
+    {
+      id: "heading",
+      role: "heading",
+      x: MARGIN,
+      y: 122,
+      w: 1150,
+      h: 110,
+      styleRef: STYLE_REF.contentHeading,
+    },
+  ];
+  if (opts.intro) {
+    slots.push({
+      id: "intro",
+      role: "subtitle",
+      x: MARGIN,
+      y: 240,
+      w: 980,
+      h: 64,
+      styleRef: STYLE_REF.contentIntro,
+    });
+  }
+  slots.push({
+    id: "footer",
+    role: "footer",
+    x: MARGIN,
+    y: 744,
+    w: CONTENT_W,
+    h: 28,
+    styleRef: STYLE_REF.contentFooter,
+  });
+  return slots;
+}
+
+// — Card grid: a row of N cards, each a surface panel with title / figure / description. —
+const CARD_TOP = 336;
+const CARD_H = 352;
+const CARD_GAP = 28;
+const CARD_PAD = 32;
+
+/** N evenly-spaced cards across the content width; the bg block precedes each card's text. */
+function cardSlots(count: number): Array<ISlot> {
+  const cardW = Math.floor((CONTENT_W - (count - 1) * CARD_GAP) / count);
+  const innerW = cardW - CARD_PAD * 2;
+  const slots: Array<ISlot> = [];
+  for (let i = 0; i < count; i++) {
+    const cardX = MARGIN + i * (cardW + CARD_GAP);
+    const innerX = cardX + CARD_PAD;
+    const n = i + 1;
+    slots.push(
+      {
+        id: `card${n}-bg`,
+        role: "block",
+        x: cardX,
+        y: CARD_TOP,
+        w: cardW,
+        h: CARD_H,
+        styleRef: STYLE_REF.cardBg,
+      },
+      {
+        id: `card${n}-title`,
+        role: "custom",
+        x: innerX,
+        y: CARD_TOP + 36,
+        w: innerW,
+        h: 64,
+        styleRef: STYLE_REF.cardTitle,
+      },
+      {
+        id: `card${n}-value`,
+        role: "custom",
+        x: innerX,
+        y: CARD_TOP + 112,
+        w: innerW,
+        h: 60,
+        styleRef: STYLE_REF.cardValue,
+      },
+      {
+        id: `card${n}-desc`,
+        role: "custom",
+        x: innerX,
+        y: CARD_TOP + 188,
+        w: innerW,
+        h: 140,
+        styleRef: STYLE_REF.cardDesc,
+      },
+    );
+  }
+  return slots;
+}
+
+/** Card grid variant with `count` cards (2–4). Full width, no side panel. */
+function makeCardGrid(count: number): IArchetype {
+  return {
+    id: `card-grid-${count}`,
+    name: `Card grid (${count})`,
+    slots: [...whiteHeader({ intro: true }), ...cardSlots(count)],
+  };
+}
+
+/** Two column: an accent-border list (left) + a prose/secondary-list explainer (right). */
+const twoColumnArchetype: IArchetype = {
+  id: "two-column",
+  name: "Two column",
+  slots: [
+    {
+      id: "eyebrow",
+      role: "eyebrow",
+      x: MARGIN,
+      y: 84,
+      w: 1000,
+      h: 30,
+      styleRef: STYLE_REF.contentEyebrow,
+    },
+    {
+      id: "heading",
+      role: "heading",
+      x: MARGIN,
+      y: 122,
+      w: 1150,
+      h: 120,
+      styleRef: STYLE_REF.contentHeading,
+    },
+    {
+      id: "left-list",
+      role: "body",
+      x: MARGIN,
+      y: 300,
+      w: 560,
+      h: 410,
+      styleRef: STYLE_REF.twoColLeftList,
+    },
+    {
+      id: "right-label",
+      role: "eyebrow",
+      x: 744,
+      y: 300,
+      w: 600,
+      h: 28,
+      styleRef: STYLE_REF.twoColRightLabel,
+    },
+    {
+      id: "right-body",
+      role: "custom",
+      x: 744,
+      y: 344,
+      w: 600,
+      h: 366,
+      styleRef: STYLE_REF.twoColRightBody,
+    },
+    {
+      id: "footer",
+      role: "footer",
+      x: MARGIN,
+      y: 744,
+      w: CONTENT_W,
+      h: 28,
+      styleRef: STYLE_REF.contentFooter,
+    },
+  ],
+};
+
+// — Stat: one to three large metric figures with labels. Full width, no side panel. —
+const STAT_TOP = 360;
+const STAT_GAP = 48;
+
+/** N evenly-spaced metric blocks (figure + label + caption) across the content width. */
+function statSlots(count: number): Array<ISlot> {
+  const blockW = Math.floor((CONTENT_W - (count - 1) * STAT_GAP) / count);
+  const slots: Array<ISlot> = [];
+  for (let i = 0; i < count; i++) {
+    const x = MARGIN + i * (blockW + STAT_GAP);
+    const n = i + 1;
+    slots.push(
+      {
+        id: `stat${n}-figure`,
+        role: "custom",
+        x,
+        y: STAT_TOP,
+        w: blockW,
+        h: 140,
+        styleRef: STYLE_REF.statFigure,
+      },
+      {
+        id: `stat${n}-label`,
+        role: "custom",
+        x,
+        y: STAT_TOP + 152,
+        w: blockW,
+        h: 32,
+        styleRef: STYLE_REF.statLabel,
+      },
+      {
+        id: `stat${n}-caption`,
+        role: "custom",
+        x,
+        y: STAT_TOP + 196,
+        w: blockW,
+        h: 104,
+        styleRef: STYLE_REF.statCaption,
+      },
+    );
+  }
+  return slots;
+}
+
+/** Stat variant with `count` figures (1–3). */
+function makeStat(count: number): IArchetype {
+  return {
+    id: `stat-${count}`,
+    name: `Stat (${count})`,
+    slots: [...whiteHeader({ intro: true }), ...statSlots(count)],
+  };
+}
+
+/** Section divider: minimal, light surface stage with one big navy title + a kicker. */
+const sectionDividerArchetype: IArchetype = {
+  id: "section-divider",
+  name: "Section divider",
+  slots: [
+    {
+      id: "bg",
+      role: "block",
+      x: 0,
+      y: 0,
+      w: 1440,
+      h: 810,
+      styleRef: STYLE_REF.dividerBg,
+    },
+    {
+      id: "eyebrow",
+      role: "eyebrow",
+      x: 120,
+      y: 320,
+      w: 900,
+      h: 36,
+      styleRef: STYLE_REF.dividerEyebrow,
+    },
+    {
+      id: "title",
+      role: "title",
+      x: 120,
+      y: 368,
+      w: 1200,
+      h: 220,
+      styleRef: STYLE_REF.dividerTitle,
+    },
+    {
+      id: "rule",
+      role: "block",
+      x: 124,
+      y: 604,
+      w: 180,
+      h: 8,
+      styleRef: STYLE_REF.dividerRule,
+    },
+  ],
+};
+
+/** Callout: a prominent statement/quote block + attribution. Generous margins for emphasis. */
+const calloutArchetype: IArchetype = {
+  id: "callout",
+  name: "Callout",
+  slots: [
+    {
+      id: "eyebrow",
+      role: "eyebrow",
+      x: 160,
+      y: 250,
+      w: 900,
+      h: 30,
+      styleRef: STYLE_REF.calloutEyebrow,
+    },
+    {
+      id: "rule",
+      role: "block",
+      x: 160,
+      y: 300,
+      w: 120,
+      h: 10,
+      styleRef: STYLE_REF.calloutRule,
+    },
+    {
+      id: "quote",
+      role: "custom",
+      x: 160,
+      y: 336,
+      w: 1120,
+      h: 300,
+      styleRef: STYLE_REF.calloutQuote,
+    },
+    {
+      id: "attribution",
+      role: "custom",
+      x: 160,
+      y: 660,
+      w: 900,
+      h: 40,
+      styleRef: STYLE_REF.calloutAttribution,
+    },
+  ],
+};
+
 // Left column of label/value rows — geometry kept regular so rows stack cleanly.
 const ROW_COUNT = 5;
 const ROW_TOP = 316;
@@ -100,7 +429,13 @@ const sidebarRowSlots: Array<ISlot> = Array.from(
   }),
 );
 
-/** Table + sidebar: eyebrow + heading + a left column of label/value rows + navy panel. */
+/**
+ * Table + sidebar: eyebrow + heading + a left column of label/value rows + a navy panel.
+ *
+ * The panel is a STRUCTURED stat callout (bg block + label + big figure + caption), not the
+ * lone-paragraph holder it used to be — the strongest visual element carries one headline metric.
+ * The panel bg precedes its text slots so the text paints on top.
+ */
 const tableSidebarArchetype: IArchetype = {
   id: "table-sidebar",
   name: "Table + sidebar",
@@ -134,23 +469,77 @@ const tableSidebarArchetype: IArchetype = {
       styleRef: STYLE_REF.sidebarFooter,
     },
     {
-      id: "panel",
-      role: "panel",
+      id: "panel-bg",
+      role: "block",
       x: 872,
       y: 88,
       w: 488,
       h: 634,
-      styleRef: STYLE_REF.sidebarPanel,
-      layout: "centered",
+      styleRef: STYLE_REF.sidebarPanelBg,
+    },
+    {
+      id: "panel-label",
+      role: "eyebrow",
+      x: 918,
+      y: 150,
+      w: 396,
+      h: 30,
+      styleRef: STYLE_REF.sidebarPanelLabel,
+    },
+    {
+      id: "panel-figure",
+      role: "custom",
+      x: 918,
+      y: 206,
+      w: 396,
+      h: 150,
+      styleRef: STYLE_REF.sidebarPanelFigure,
+    },
+    {
+      id: "panel-caption",
+      role: "custom",
+      x: 918,
+      y: 384,
+      w: 396,
+      h: 290,
+      styleRef: STYLE_REF.sidebarPanelCaption,
     },
   ],
 };
 
+/**
+ * Every registered archetype, including the count variants. Keyed by id for lookup during
+ * generation/rendering. Ids are free-form strings, so the count variants slot in cleanly.
+ */
+const ALL_ARCHETYPES: Array<IArchetype> = [
+  titleArchetype,
+  sectionDividerArchetype,
+  calloutArchetype,
+  twoColumnArchetype,
+  tableSidebarArchetype,
+  ...[2, 3, 4].map(makeCardGrid),
+  ...[1, 2, 3].map(makeStat),
+];
+
 /** All defined archetypes, keyed by id for lookup during generation/rendering. */
-export const ARCHETYPES = {
-  [titleArchetype.id]: titleArchetype,
-  [tableSidebarArchetype.id]: tableSidebarArchetype,
-} satisfies Partial<Record<IArchetype["id"], IArchetype>>;
+export const ARCHETYPES: Record<string, IArchetype> = Object.fromEntries(
+  ALL_ARCHETYPES.map((archetype) => [archetype.id, archetype]),
+);
+
+/**
+ * The archetype FAMILIES the planner chooses between (count variants collapse to one name).
+ * The selector maps a family + the content's shape to a concrete registered id.
+ */
+export const ARCHETYPE_FAMILIES = [
+  "title",
+  "section-divider",
+  "callout",
+  "two-column",
+  "table-sidebar",
+  "card-grid",
+  "stat",
+] as const;
+export type TArchetypeFamily = (typeof ARCHETYPE_FAMILIES)[number];
 
 /** Look up an archetype by id. Ids are free-form strings; callers pass known ones. */
 export function getArchetype(id: string): IArchetype {

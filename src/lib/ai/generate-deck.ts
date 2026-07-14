@@ -25,11 +25,11 @@ import type {
 } from "@/lib/ai/generate-schema";
 import { getDb } from "@/db/client";
 import { decks, documents, slides } from "@/db/schema";
-import { ARCHETYPES, getArchetype } from "@/lib/slides/archetypes";
+import { ARCHETYPE_FAMILIES, getArchetype } from "@/lib/slides/archetypes";
 import { DESIGN_TOKENS } from "@/lib/slides/tokens";
 import { GenerateDeckInputSchema } from "@/lib/ai/generate-schema";
 import { fallbackPlan, planDeck } from "@/lib/ai/plan";
-import { pickArchetype } from "@/lib/ai/pick-archetype";
+import { planArchetypes } from "@/lib/ai/pick-archetype";
 import { fillSlide } from "@/lib/ai/fill";
 import { verifySlideGrounding } from "@/lib/ai/grounding";
 import { describeFitIssues, verifySlideFit } from "@/lib/ai/fit";
@@ -209,18 +209,18 @@ async function generateSlideTask(
   deckId: string,
   index: number,
   item: TSlidePlanItem,
-  doc: { markdown: string; sections: Array<ISection> },
+  sections: Array<ISection>,
+  archetypeId: string,
+  markdown: string,
   tokens: ITokens,
 ): Promise<TSlideOutcome> {
   try {
-    const sections = selectSections(doc.sections, item.sectionIds);
-    const archetypeId = pickArchetype(item, sections, ARCHETYPES);
     const { slide, grounding } = await buildOneSlide({
       slideId: `${deckId}-s${index + 1}`,
       item,
       sections,
       archetypeId,
-      markdown: doc.markdown,
+      markdown,
       tokens,
     });
     await persistSlide(db, deckId, index, slide, grounding);
@@ -251,7 +251,7 @@ export const generateDeck = createServerFn({ method: "POST" })
       return;
     }
 
-    const archetypeIds = Object.keys(ARCHETYPES);
+    const familyIds = [...ARCHETYPE_FAMILIES];
 
     // Plan (one model call) with a deterministic fallback — a planner hiccup never breaks gen.
     // But a fatal provider error (quota/auth) would doom every fill too, so abort now with a
@@ -261,7 +261,7 @@ export const generateDeck = createServerFn({ method: "POST" })
       plan = await planDeck(
         data.prompt,
         summarizeSections(doc.sections),
-        archetypeIds,
+        familyIds,
       );
       if (plan.slides.length === 0) plan = fallbackPlan(doc.sections);
     } catch (error) {
@@ -286,9 +286,28 @@ export const generateDeck = createServerFn({ method: "POST" })
     // Generate the slides with bounded concurrency (GENERATE_CONCURRENCY in flight), emitting each
     // as it completes. The tasks are total, so the pool never throws; a fatal provider wall hits
     // every slide the same way, so surface it once and stop launching more.
-    const tasks = plan.slides.map(
-      (item, index) => () =>
-        generateSlideTask(db, deckId, index, item, doc, tokens),
+    // Resolve each slide's sections, then choose archetypes for the WHOLE deck up-front: the fill
+    // loop below runs slides concurrently, so a per-slide selector couldn't diversify layouts —
+    // planArchetypes applies its cross-slide diversity penalty here, before any fill starts.
+    const perSlide = plan.slides.map((item, index) => ({
+      item,
+      index,
+      sections: selectSections(doc.sections, item.sectionIds),
+    }));
+    const archetypeIds = planArchetypes(perSlide);
+
+    const tasks = perSlide.map(
+      (slide, i) => () =>
+        generateSlideTask(
+          db,
+          deckId,
+          slide.index,
+          slide.item,
+          slide.sections,
+          archetypeIds[i],
+          doc.markdown,
+          tokens,
+        ),
     );
     const generationConfig = getConfig().generation;
 

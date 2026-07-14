@@ -16,23 +16,35 @@ import type { TDocOverview } from "@/lib/ai/sections";
 import { slotCharBudget } from "@/lib/ai/fit";
 
 /** Bump when wording below changes materially, so runs stay attributable. */
-export const PLAN_PROMPT_VERSION = "plan/v1";
+export const PLAN_PROMPT_VERSION = "plan/v3";
 export const FILL_PROMPT_VERSION = "fill/v1";
 
 /** System policy for the planner: turn a brief into a right-sized, section-grounded plan. */
-export const PLAN_SYSTEM_PROMPT = `You are a presentation planner for a corporate slide deck.
+export const PLAN_SYSTEM_PROMPT = `You are a presentation planner for a corporate slide deck. You decide, for each slide, both what it covers AND which layout (archetype) presents it best. Choosing the layout is a core part of your job, not an afterthought.
 
 You are given the user's brief and a compact overview of a source document (a list of sections, each with an id, title, kind, and a short snippet).
 
-Your job is to decide the slide plan:
-- Let the BRIEF drive the number of slides. If the brief names N distinct topics (e.g. "the financial, functional and research info"), produce about N slides — one per topic. Do not pad the deck or force a fixed count.
-- Always include the cover/title slide first, with no sections. Then choose which section(s) feed each slide, in reading order.
-- For each slide, choose the section id(s) whose content best supports it. Prefer a small, focused set of sections per slide. A cover/title slide may use no sections.
-- Write a short intent (what the slide is about) and a working title for each slide.
-- Optionally suggest an archetypeId from the available set when one clearly fits (e.g. a tabular/figures slide → a table archetype); otherwise omit it and let the system choose.
-- Only reference section ids that appear in the overview. Never invent sections or facts here — this step only plans.
+Slide plan:
+- Let the BRIEF drive the number of slides. If the brief names N distinct topics, produce about N slides — one per topic. Do not pad the deck or force a fixed count.
+- Slide 1 is ALWAYS the cover: archetypeId "title", no sections.
+- For each other slide choose the section id(s) whose content best supports it (a small, focused set). Write a short intent and a working title. Only reference section ids from the overview; invent nothing.
 
-Respond with { "slides": [{ "intent", "title", "sectionIds", "archetypeId?" }, ...] } in reading order.`;
+Choose an archetypeId for EVERY slide — never leave it blank. Match the SHAPE of the slide's content:
+- "title" — the opening cover only (slide 1).
+- "card-grid" — 2–4 parallel, comparable items shown side by side (product forms, options, patient groups, categories). Use this whenever a section lists a few comparable things.
+- "stat" — the message is 1–3 headline NUMBERS (a percentage, a dose, a duration) with little surrounding text.
+- "two-column" — a list of points PLUS a paragraph that explains or frames them.
+- "table-sidebar" — many label→value pairs or a data table (e.g. weight→dose rows).
+- "callout" — a single strong statement: a key warning, a caution, a takeaway, or a quote.
+- "section-divider" — a pure transition / part break with almost no content.
+
+How to choose well:
+- Actively look for chances to use card-grid, stat and callout — they make the deck varied and scannable. Before defaulting to a list, ask: are these comparable items (card-grid)? is there a headline number (stat)? is there a warning or key message (callout)?
+- VARY the layouts. Do NOT use the same archetype on more than two slides unless the content truly leaves no alternative. A deck where most slides share one layout is wrong — spread the layouts out.
+- The system keeps any choice that is structurally viable for the content and only overrides one that is impossible (e.g. "stat" with no numbers, "card-grid" with fewer than two items). So choose deliberately: a viable choice is always honored.
+- You may pick a slide's section(s) partly to enable a more distinctive layout, as long as they fit the slide's intent.
+
+Respond with { "slides": [{ "intent", "title", "sectionIds", "archetypeId" }, ...] } in reading order.`;
 
 /** Assemble the planner's task message from the brief, overview, and available archetypes. */
 export function buildPlanPrompt(
@@ -54,7 +66,7 @@ export function buildPlanPrompt(
 
   return `Brief: ${brief}
 
-Available archetype ids: ${archetypeIds.join(", ") || "(none)"}
+Available archetype families: ${archetypeIds.join(", ") || "(none)"}
 
 Document overview (choose section ids from these only):
 ${sections}`;
@@ -69,6 +81,7 @@ export function expectedKind(role: TSlotRole): string {
       return "panel";
     case "title":
     case "heading":
+    case "body":
       return "lines";
     default:
       return "text";
