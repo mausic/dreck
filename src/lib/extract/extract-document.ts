@@ -6,8 +6,8 @@
  * Both persist to `documents` (markdown as the durable source of truth) and echo back.
  *
  * DESIGN PDF (the style template): no OCR — its words are discarded. Instead `extractDesignSystem`
- * derives the {@link import("@/lib/slides").ITokens} (fonts deterministic, colors via the model
- * reading the PDF) and caches them on the row, so generation reads them back without re-extracting.
+ * derives design tokens plus representative layout archetypes and caches them on the row, so
+ * generation reads the complete design system back without re-extracting.
  *
  * The provider/DB keys stay server-side. The handler never throws to the client: a missing key, an
  * OCR/extraction failure, or a DB error all resolve to `{ ok: false }`. Because this backs a debug
@@ -42,9 +42,8 @@ export const extractDocument = createServerFn({ method: "POST" })
       const db = getDb();
 
       if (data.role === "design") {
-        // Design deck → tokens only (fonts deterministic, colors via model). No OCR: the design
-        // deck's words are never used, so markdown/sections are stored empty.
-        const { tokens, feel } = await extractDesignSystem(
+        // Design deck → tokens + layout skeletons. No OCR: source words are never persisted or used.
+        const { tokens, feel, archetypes } = await extractDesignSystem(
           base64ToBytes(data.pdfBase64),
         );
         const [row] = await db
@@ -56,6 +55,7 @@ export const extractDocument = createServerFn({ method: "POST" })
             sections: [],
             designTokens: tokens,
             designFeel: feel,
+            designArchetypes: archetypes,
           })
           .returning({ id: documents.id });
 
@@ -68,6 +68,7 @@ export const extractDocument = createServerFn({ method: "POST" })
           sections: [],
           designTokens: tokens,
           designFeel: feel,
+          designArchetypes: archetypes,
         };
       }
 
@@ -93,9 +94,11 @@ export const extractDocument = createServerFn({ method: "POST" })
         sections,
       };
     } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Extraction failed.";
       return {
         ok: false,
-        error: error instanceof Error ? error.message : "Extraction failed.",
+        error: `${data.role === "design" ? "Design" : "Content"} extraction failed; nothing was saved. ${message}`,
       };
     }
   });

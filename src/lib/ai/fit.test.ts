@@ -49,6 +49,21 @@ describe("verifySlideFit", () => {
     );
   });
 
+  it("ignores thin decorative blocks", () => {
+    const block: ISlideElement = {
+      id: "s--rule",
+      slotId: "rule",
+      role: "block",
+      x: 120,
+      y: 300,
+      w: 160,
+      h: 8,
+      content: "",
+      styleRef: STYLE_REF.titleRule,
+    };
+    expect(verifySlideFit(slide(block)).ok).toBe(true);
+  });
+
   it("flags a title that overruns its two lines", () => {
     const report = verifySlideFit(
       slide(
@@ -71,6 +86,32 @@ describe("verifySlideFit", () => {
 });
 
 describe("slotCharBudget", () => {
+  it("reports when a style's line box is taller than the slot", () => {
+    const slot: ISlot = {
+      id: "heading",
+      role: "heading",
+      x: 0,
+      y: 0,
+      w: 600,
+      h: 20,
+      styleRef: STYLE_REF.contentHeading,
+    };
+    expect(slotCharBudget(slot)).toBe("no text fits this box");
+  });
+
+  it("reports an undersized table row as unusable", () => {
+    const slot: ISlot = {
+      id: "row",
+      role: "tableRow",
+      x: 0,
+      y: 0,
+      w: 600,
+      h: 1,
+      styleRef: STYLE_REF.sidebarRow,
+    };
+    expect(slotCharBudget(slot)).toBe("no text fits this box");
+  });
+
   it("gives a positive character budget for a text slot", () => {
     const slot: ISlot = {
       id: "title",

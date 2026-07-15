@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { ISection } from "@/lib/extract/section";
+import type { IExtractedArchetype } from "@/lib/slides/types";
 import type { IArchetypeInput } from "@/lib/ai/pick-archetype";
 import {
   analyzeContentShape,
   pickArchetype,
   planArchetypes,
+  planExtractedArchetypes,
 } from "@/lib/ai/pick-archetype";
 
 function section(content: string): ISection {
@@ -168,5 +170,70 @@ Another prose sentence adding context to the same topic.
     );
     const results = planArchetypes(slides);
     expect(new Set(results).size).toBeGreaterThan(1);
+  });
+});
+
+describe("planExtractedArchetypes", () => {
+  const archetypes: Array<IExtractedArchetype> = [
+    {
+      id: "deck-opening",
+      name: "Deck opening",
+      category: "cover",
+      description: "Cover",
+      slots: [],
+    },
+    {
+      id: "deck-split",
+      name: "Deck split",
+      category: "mixed",
+      description: "Split content",
+      slots: [],
+    },
+    {
+      id: "deck-emphasis",
+      name: "Deck emphasis",
+      category: "statement",
+      description: "Emphasized statement",
+      slots: [],
+    },
+  ];
+
+  it("forces the extracted cover for the first slide", () => {
+    const result = planExtractedArchetypes(
+      [input("", { index: 0, archetypeId: "deck-split" })],
+      archetypes,
+    );
+    expect(result[0].id).toBe("deck-opening");
+  });
+
+  it("honors an exact non-cover id from the extracted catalog", () => {
+    const result = planExtractedArchetypes(
+      [input("Content", { archetypeId: "deck-emphasis" })],
+      archetypes,
+    );
+    expect(result[0].id).toBe("deck-emphasis");
+  });
+
+  it("uses content shape when a suggested id is absent or incompatible", () => {
+    const result = planExtractedArchetypes(
+      [
+        input(
+          `A detailed opening paragraph for the topic.
+Supporting context follows on another line.
+Further explanation belongs in the main body.
+The final line completes the overview.`,
+          { archetypeId: "missing" },
+        ),
+        input("Important warning", {
+          archetypeId: "deck-opening",
+          intent: "Key warning",
+        }),
+      ],
+      archetypes,
+    );
+    expect(result.map((archetype) => archetype.id)).toEqual([
+      "deck-split",
+      "deck-emphasis",
+    ]);
   });
 });

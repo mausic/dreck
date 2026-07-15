@@ -7,7 +7,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import type { ISection } from "@/lib/extract/section";
-import type { ISlide, ITokens } from "@/lib/slides/types";
+import type { IExtractedArchetype, ISlide, ITokens } from "@/lib/slides/types";
 import type { IGroundingReport, TSlidePlan } from "@/lib/ai/generate-schema";
 
 /** Which half of the two-PDF upload a document is: the content PDF or the design PDF. */
@@ -24,6 +24,8 @@ export const documents = pgTable("documents", {
   // them, and generation reads these back instead of re-extracting on every deck.
   designTokens: jsonb("design_tokens").$type<ITokens>(),
   designFeel: text("design_feel"),
+  designArchetypes:
+    jsonb("design_archetypes").$type<Array<IExtractedArchetype>>(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),

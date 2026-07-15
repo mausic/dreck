@@ -1,4 +1,8 @@
-import type { IArchetype, ISlot } from "@/lib/slides/types";
+import type {
+  IArchetype,
+  IArchetypeDescriptor,
+  ISlot,
+} from "@/lib/slides/types";
 import { STYLE_REF } from "@/lib/slides/styles";
 
 /**
@@ -541,7 +545,56 @@ export const ARCHETYPE_FAMILIES = [
 ] as const;
 export type TArchetypeFamily = (typeof ARCHETYPE_FAMILIES)[number];
 
-/** Look up an archetype by id. Ids are free-form strings; callers pass known ones. */
-export function getArchetype(id: string): IArchetype {
+/** Planner-facing descriptions for the built-in families. */
+export const ARCHETYPE_FAMILY_DESCRIPTORS: Array<IArchetypeDescriptor> = [
+  {
+    id: "title",
+    name: "Title",
+    category: "cover",
+    description:
+      "Opening cover with eyebrow, large title, subtitle, and footer.",
+  },
+  {
+    id: "section-divider",
+    name: "Section divider",
+    category: "section",
+    description:
+      "Minimal transition or chapter break with almost no body content.",
+  },
+  {
+    id: "callout",
+    name: "Callout",
+    category: "statement",
+    description: "One prominent warning, takeaway, quote, or key message.",
+  },
+  {
+    id: "two-column",
+    name: "Two column",
+    category: "mixed",
+    description: "A list of points beside explanatory prose.",
+  },
+  {
+    id: "table-sidebar",
+    name: "Table + sidebar",
+    category: "table",
+    description: "Several label-value rows beside a highlighted metric panel.",
+  },
+  {
+    id: "card-grid",
+    name: "Card grid",
+    category: "parallel-items",
+    description: "Two to four comparable items presented as parallel cards.",
+  },
+  {
+    id: "stat",
+    name: "Statistics",
+    category: "metrics",
+    description:
+      "One to three headline numbers with short labels and captions.",
+  },
+];
+
+/** Look up an archetype by id. */
+export function getArchetype(id: string): IArchetype | undefined {
   return ARCHETYPES[id];
 }

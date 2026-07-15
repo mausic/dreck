@@ -158,6 +158,7 @@ export function DocumentPicker({
         sourceName: res.sourceName,
         designTokens: res.designTokens ?? null,
         designFeel: res.designFeel ?? null,
+        designArchetypes: res.designArchetypes ?? null,
       };
       queryClient.setQueryData<Array<TDocOption>>(
         documentsKeys.role(role),

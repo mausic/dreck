@@ -19,6 +19,7 @@ export const STYLE_REF = {
   sidebarEyebrow: "sidebar/eyebrow",
   sidebarHeading: "sidebar/heading",
   sidebarRow: "sidebar/row",
+  sidebarDarkRow: "sidebar/dark-row",
   sidebarPanel: "sidebar/panel",
   sidebarFooter: "sidebar/footer",
 
@@ -62,6 +63,52 @@ export const STYLE_REF = {
   sidebarPanelFigure: "sidebar/panel-figure",
   sidebarPanelCaption: "sidebar/panel-caption",
 } as const;
+
+type TKnownStyleRef = (typeof STYLE_REF)[keyof typeof STYLE_REF];
+
+/** Style references the design extractor is allowed to assign to generated slots. */
+export const STYLE_REFS = Object.values(STYLE_REF) as [
+  TKnownStyleRef,
+  ...Array<TKnownStyleRef>,
+];
+
+/** Presets that paint visual regions instead of text. */
+export const BLOCK_STYLE_REFS = new Set<string>([
+  STYLE_REF.titleBg,
+  STYLE_REF.titleRule,
+  STYLE_REF.cardBg,
+  STYLE_REF.dividerBg,
+  STYLE_REF.dividerRule,
+  STYLE_REF.calloutRule,
+  STYLE_REF.sidebarPanelBg,
+]);
+
+/** Block presets whose contained text needs light-on-dark styling. */
+export const DARK_BLOCK_STYLE_REFS = new Set<string>([
+  STYLE_REF.titleBg,
+  STYLE_REF.sidebarPanelBg,
+]);
+
+/** Block presets that define a containing surface for nested text. */
+export const SURFACE_BLOCK_STYLE_REFS = new Set<string>([
+  STYLE_REF.titleBg,
+  STYLE_REF.cardBg,
+  STYLE_REF.dividerBg,
+  STYLE_REF.sidebarPanelBg,
+]);
+
+/** Text presets designed to render on a primary/dark surface. */
+export const DARK_TEXT_STYLE_REFS = new Set<string>([
+  STYLE_REF.titleLogo,
+  STYLE_REF.titleEyebrow,
+  STYLE_REF.titleTitle,
+  STYLE_REF.titleSubtitle,
+  STYLE_REF.titleFooter,
+  STYLE_REF.sidebarDarkRow,
+  STYLE_REF.sidebarPanelLabel,
+  STYLE_REF.sidebarPanelFigure,
+  STYLE_REF.sidebarPanelCaption,
+]);
 
 const STYLE_PRESETS: Record<string, CSSProperties> = {
   // — Title archetype (light text on a full-bleed primary stage) —
@@ -148,6 +195,15 @@ const STYLE_PRESETS: Record<string, CSSProperties> = {
     color: "var(--slide-text-dark)",
     borderBottom:
       "1px solid color-mix(in srgb, var(--slide-text-muted), var(--slide-white) 60%)",
+  },
+  [STYLE_REF.sidebarDarkRow]: {
+    display: "flex",
+    alignItems: "center",
+    fontFamily: "var(--slide-font-body)",
+    fontSize: 25,
+    color: "var(--slide-white)",
+    borderBottom:
+      "1px solid color-mix(in srgb, var(--slide-white), transparent 62%)",
   },
   [STYLE_REF.sidebarPanel]: {
     background: "var(--slide-primary)",

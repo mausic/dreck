@@ -2,9 +2,15 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
-import { Textarea } from "../ui/textarea";
 import type { AnyFieldApi } from "@tanstack/react-form";
-import type { IDeck, ISlide, ITokens } from "@/lib/slides";
+import type {
+  IDeck,
+  IExtractedArchetype,
+  ISlide,
+  ITokens,
+  TSlotContent,
+  TSlotRole,
+} from "@/lib/slides";
 import type { IGroundingReport } from "@/lib/ai/generate-schema";
 import { DESIGN_TOKENS } from "@/lib/slides";
 import { generateDeck } from "@/lib/ai/generate-deck";
@@ -19,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 
 /** Per-slide UI state as events stream in: a placeholder, a finished slide, or a failure. */
 type TSlotState =
@@ -51,11 +58,13 @@ function DesignSystemView({
   id,
   tokens,
   feel,
+  archetypes,
 }: {
   sourceName: string;
   id: string;
   tokens: ITokens;
   feel?: string | null;
+  archetypes?: Array<IExtractedArchetype> | null;
 }) {
   return (
     <div className="flex flex-col gap-3 rounded-md border p-4">
@@ -89,6 +98,82 @@ function DesignSystemView({
         </p>
         {feel && <p className="mt-1 italic">“{feel}”</p>}
       </div>
+      {archetypes && archetypes.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <p className="text-xs font-medium">
+            {archetypes.length} extracted layouts
+          </p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {archetypes.map((archetype) => (
+              <ArchetypePreview
+                key={archetype.id}
+                archetype={archetype}
+                tokens={tokens}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function previewContent(role: TSlotRole): TSlotContent {
+  switch (role) {
+    case "block":
+      return "";
+    case "tableRow":
+      return { label: "Label", value: "Value" };
+    case "panel":
+      return { heading: "Key message", body: "Supporting detail" };
+    case "body":
+      return ["Key point", "Supporting point"];
+    case "title":
+      return "Presentation title";
+    case "heading":
+      return "Slide heading";
+    case "eyebrow":
+      return "Section label";
+    case "footer":
+      return "Footer";
+    case "logo":
+      return "Brand";
+    default:
+      return "Content";
+  }
+}
+
+function ArchetypePreview({
+  archetype,
+  tokens,
+}: {
+  archetype: IExtractedArchetype;
+  tokens: ITokens;
+}) {
+  const slide: ISlide = {
+    id: `preview-${archetype.id}`,
+    archetypeId: archetype.id,
+    elements: archetype.slots.map((slot) => ({
+      id: `preview-${archetype.id}--${slot.id}`,
+      slotId: slot.id,
+      role: slot.role,
+      x: slot.x,
+      y: slot.y,
+      w: slot.w,
+      h: slot.h,
+      content: previewContent(slot.role),
+      styleRef: slot.styleRef,
+    })),
+  };
+
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <div className="bg-card aspect-video overflow-hidden rounded border">
+        <SlidePreview slide={slide} tokens={tokens} />
+      </div>
+      <p className="text-muted-foreground truncate text-[11px]">
+        {archetype.name}
+      </p>
     </div>
   );
 }
@@ -262,8 +347,8 @@ export function GeneratePanel() {
           <h2 className="text-sm font-semibold">Generate slides</h2>
           <p className="text-muted-foreground text-sm">
             Pick or upload a content PDF (and, optionally, a design PDF whose
-            fonts + palette style the deck), describe the deck, and slides
-            stream in as they’re generated.
+            fonts, palette, and layouts style the deck), describe the deck, and
+            slides stream in as they’re generated.
           </p>
         </div>
 
@@ -308,7 +393,7 @@ export function GeneratePanel() {
                     onValueChange={field.handleChange}
                     docs={designDocs.data ?? []}
                     noneLabel="Default tokens"
-                    hint="The styled deck whose fonts + palette define the look."
+                    hint="The styled deck whose fonts, palette, and layouts define the look."
                   />
                 )}
               </form.Field>
@@ -328,6 +413,7 @@ export function GeneratePanel() {
                   id={doc.id}
                   tokens={doc.designTokens}
                   feel={doc.designFeel}
+                  archetypes={doc.designArchetypes}
                 />
               );
             }}

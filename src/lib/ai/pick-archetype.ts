@@ -17,6 +17,10 @@
  */
 import type { ISection } from "@/lib/extract/section";
 import type { TSlidePlanItem } from "@/lib/ai/generate-schema";
+import type {
+  IExtractedArchetype,
+  TArchetypeCategory,
+} from "@/lib/slides/types";
 import type { TArchetypeFamily } from "@/lib/slides/archetypes";
 import { ARCHETYPE_FAMILIES } from "@/lib/slides/archetypes";
 
@@ -341,4 +345,78 @@ export function planArchetypes(inputs: Array<IArchetypeInput>): Array<string> {
     used[family] = (used[family] ?? 0) + 1;
     return resolveVariant(family, shape);
   });
+}
+
+/**
+ * Resolve exact ids from an extracted catalog. The planner chooses the layout; code enforces a
+ * cover first and falls back across content layouts when an id is absent or invalid.
+ */
+export function planExtractedArchetypes(
+  inputs: Array<IArchetypeInput>,
+  archetypes: Array<IExtractedArchetype>,
+): Array<IExtractedArchetype> {
+  const cover = archetypes.find((archetype) => archetype.category === "cover");
+  const content = archetypes.filter(
+    (archetype) => archetype.category !== "cover",
+  );
+  if (!cover || content.length === 0) {
+    throw new Error(
+      "Extracted design has no usable cover or content archetype.",
+    );
+  }
+
+  const byId = new Map(
+    archetypes.map((archetype) => [archetype.id, archetype]),
+  );
+  return inputs.map((input) => {
+    if (input.index === 0) return cover;
+    const shape = analyzeContentShape(input);
+    const suggested = input.item.archetypeId
+      ? byId.get(input.item.archetypeId)
+      : undefined;
+    if (suggested && isExtractedCategoryFeasible(suggested.category, shape)) {
+      return suggested;
+    }
+
+    const preferred = preferredExtractedCategory(shape);
+    return (
+      content.find((archetype) => archetype.category === preferred) ??
+      content.find((archetype) =>
+        isExtractedCategoryFeasible(archetype.category, shape),
+      ) ??
+      content[0]
+    );
+  });
+}
+
+function preferredExtractedCategory(shape: IContentShape): TArchetypeCategory {
+  if (shape.isTransition) return "section";
+  if (shape.isDominantMetric) return "metrics";
+  if (shape.structuredRatio >= 0.5 || shape.labelValueCount >= 2)
+    return "table";
+  if (shape.itemCount >= 2) return "parallel-items";
+  if (shape.isStrongStatement) return "statement";
+  return "mixed";
+}
+
+function isExtractedCategoryFeasible(
+  category: TArchetypeCategory,
+  shape: IContentShape,
+): boolean {
+  switch (category) {
+    case "cover":
+      return false;
+    case "section":
+      return shape.isTransition;
+    case "metrics":
+      return shape.metricCount >= 1;
+    case "parallel-items":
+      return shape.itemCount >= 2;
+    case "table":
+      return shape.itemCount >= 3 || shape.labelValueCount >= 2;
+    case "statement":
+      return shape.itemCount <= 4;
+    case "mixed":
+      return true;
+  }
 }
