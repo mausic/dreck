@@ -246,6 +246,92 @@ describe("enhanceExtractedArchetypes", () => {
     );
   });
 
+  it("separates slightly overlapping text regions in the same column", () => {
+    const content: IExtractedArchetype = {
+      id: "crowded-warnings",
+      name: "Crowded warnings",
+      category: "statement",
+      description: "Stacked warning text inside a panel",
+      slots: [
+        {
+          id: "warning-one",
+          role: "body",
+          x: 760,
+          y: 528,
+          w: 568,
+          h: 50,
+          styleRef: STYLE_REF.titleFooter,
+        },
+        {
+          id: "warning-two",
+          role: "body",
+          x: 760,
+          y: 575,
+          w: 568,
+          h: 50,
+          styleRef: STYLE_REF.titleFooter,
+        },
+        {
+          id: "warning-three",
+          role: "body",
+          x: 760,
+          y: 622,
+          w: 568,
+          h: 50,
+          styleRef: STYLE_REF.titleFooter,
+        },
+      ],
+    };
+
+    const result = enhanceExtractedArchetypes([content], {
+      validateCatalog: false,
+    });
+    const [first, second, third] = result.archetypes[0].slots;
+    expect(second.y).toBeGreaterThanOrEqual(first.y + first.h + 8);
+    expect(third.y).toBeGreaterThanOrEqual(second.y + second.h + 8);
+  });
+
+  it("centers a lone text slot within a compact surface block", () => {
+    const content: IExtractedArchetype = {
+      id: "compact-callout",
+      name: "Compact callout",
+      category: "mixed",
+      description: "One text region inside a short card",
+      slots: [
+        {
+          id: "row-background",
+          role: "block",
+          x: 814,
+          y: 420,
+          w: 518,
+          h: 54,
+          styleRef: STYLE_REF.cardBg,
+        },
+        {
+          id: "row-text",
+          role: "body",
+          x: 834,
+          y: 429,
+          w: 480,
+          h: 45,
+          styleRef: STYLE_REF.contentFooter,
+        },
+      ],
+    };
+
+    const result = enhanceExtractedArchetypes([content], {
+      validateCatalog: false,
+    });
+    const text = result.archetypes[0].slots[1];
+    expect(text.y).toBe(424);
+    expect(text.h).toBe(46);
+    expect(
+      enhanceExtractedArchetypes(result.archetypes, {
+        validateCatalog: false,
+      }).archetypes,
+    ).toEqual(result.archetypes);
+  });
+
   it("expands a repairable panel to its minimum usable size", () => {
     const content: IExtractedArchetype = {
       id: "small-panel",

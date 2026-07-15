@@ -65,6 +65,8 @@ export interface IRawExtractedArchetype extends Omit<
 const DEFAULT_FONT_SIZE = 24;
 const DEFAULT_LINE_HEIGHT = 1.25;
 const TEXT_GAP = 8;
+const COMPACT_BLOCK_MAX_HEIGHT = 120;
+const COMPACT_BLOCK_INSET_Y = 4;
 const KNOWN_STYLE_REFS = new Set<string>(STYLE_REFS);
 
 const LIGHT_HEADING_STYLES = [
@@ -376,6 +378,36 @@ function containingBlock(slot: ISlot, slots: Array<ISlot>): ISlot | undefined {
     .sort((left, right) => left.w * left.h - right.w * right.h)[0];
 }
 
+function centerInCompactBlock(
+  archetypeId: string,
+  slot: ISlot,
+  slots: Array<ISlot>,
+  issues: Array<IArchetypeEnhancementIssue>,
+): void {
+  if (slot.role === "block" || slot.role === "panel") return;
+  const block = containingBlock(slot, slots);
+  if (!block || block.h > COMPACT_BLOCK_MAX_HEIGHT) return;
+  const containedText = slots.filter(
+    (candidate) =>
+      candidate.role !== "block" && containingBlock(candidate, slots) === block,
+  );
+  if (containedText.length !== 1) return;
+
+  const availableHeight = block.h - 2 * COMPACT_BLOCK_INSET_Y;
+  if (availableHeight < minimumSlotHeight(slot)) return;
+  const y = block.y + COMPACT_BLOCK_INSET_Y;
+  if (slot.y === y && slot.h === availableHeight) return;
+
+  slot.y = y;
+  slot.h = availableHeight;
+  issues.push({
+    archetypeId,
+    slotId: slot.id,
+    kind: "geometry",
+    message: `Centered text within compact block '${block.id}'.`,
+  });
+}
+
 function boundsFor(slot: ISlot, slots: Array<ISlot>): IBounds {
   const block = containingBlock(slot, slots);
   return block
@@ -580,18 +612,18 @@ function normalizeSlot(
   }
 }
 
-function overlapRatio(left: ISlot, right: ISlot): number {
+function horizontalOverlapRatio(left: ISlot, right: ISlot): number {
   const width = Math.max(
     0,
     Math.min(left.x + left.w, right.x + right.w) - Math.max(left.x, right.x),
   );
-  const height = Math.max(
-    0,
-    Math.min(left.y + left.h, right.y + right.h) - Math.max(left.y, right.y),
-  );
-  const intersection = width * height;
+  return width / Math.max(1, Math.min(left.w, right.w));
+}
+
+function textSlotsConflict(upper: ISlot, lower: ISlot): boolean {
   return (
-    intersection / Math.max(1, Math.min(left.w * left.h, right.w * right.h))
+    horizontalOverlapRatio(upper, lower) >= 0.35 &&
+    lower.y < upper.y + upper.h + TEXT_GAP
   );
 }
 
@@ -641,7 +673,7 @@ function repairTextOverlaps(
       ) {
         const upper = textSlots[leftIndex];
         const lower = textSlots[rightIndex];
-        if (overlapRatio(upper, lower) < 0.35) continue;
+        if (!textSlotsConflict(upper, lower)) continue;
 
         const targetY = upper.y + upper.h + TEXT_GAP;
         const shift = targetY - lower.y;
@@ -709,9 +741,9 @@ function repairTextOverlaps(
       rightIndex < textSlots.length;
       rightIndex++
     ) {
-      if (overlapRatio(textSlots[leftIndex], textSlots[rightIndex]) >= 0.35) {
+      if (textSlotsConflict(textSlots[leftIndex], textSlots[rightIndex])) {
         throw new Error(
-          `Extracted archetype '${archetype.id}' still contains overlapping text slots.`,
+          `Extracted archetype '${archetype.id}' still contains crowded text slots.`,
         );
       }
     }
@@ -736,6 +768,7 @@ export function enhanceExtractedArchetypes(
   for (const archetype of enhanced) {
     for (const slot of archetype.slots) {
       normalizeSlot(archetype.id, slot, archetype.slots, issues);
+      centerInCompactBlock(archetype.id, slot, archetype.slots, issues);
     }
     repairTextOverlaps(archetype, issues);
   }
