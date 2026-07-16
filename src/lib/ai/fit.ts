@@ -39,6 +39,13 @@ const PANEL_HEADING_LH = 1.15;
 const PANEL_HEADING_LINES = 2;
 const PANEL_BODY_FS = 22;
 const PANEL_BODY_LH = 1.5;
+export const MIN_PANEL_WIDTH = 220;
+export const MIN_PANEL_HEIGHT = Math.ceil(
+  2 * PANEL_PAD_Y +
+    PANEL_HEADING_LINES * PANEL_HEADING_FS * PANEL_HEADING_LH +
+    PANEL_GAP +
+    PANEL_BODY_FS * PANEL_BODY_LH,
+);
 
 /** Estimated room in a box: how many characters per line and how many lines fit. */
 export interface ICapacity {
@@ -89,11 +96,11 @@ function linesForHeight(
   fontSize: number,
   lineHeight: number,
 ): number {
-  return Math.max(1, Math.floor(heightPx / (fontSize * lineHeight)));
+  return Math.max(0, Math.floor(heightPx / (fontSize * lineHeight)));
 }
 
 /** Capacity of a plain text slot, from its resolved style + box. `tableRow` is one line. */
-function textCapacity(
+export function textCapacity(
   role: TSlotRole,
   styleRef: string,
   w: number,
@@ -103,8 +110,8 @@ function textCapacity(
   const fontSize = numeric(style.fontSize, DEFAULT_FONT_SIZE);
   const lineHeight = numeric(style.lineHeight, DEFAULT_LINE_HEIGHT);
   const cpl = charsPerLine(w, fontSize, style);
-  const maxLines =
-    role === "tableRow" ? 1 : linesForHeight(h, fontSize, lineHeight);
+  const heightLines = linesForHeight(h, fontSize, lineHeight);
+  const maxLines = role === "tableRow" ? Math.min(1, heightLines) : heightLines;
   return { charsPerLine: cpl, maxLines, maxChars: cpl * maxLines };
 }
 
@@ -132,23 +139,25 @@ function panelCapacity(
     1,
     Math.floor(bodyH / (PANEL_BODY_FS * PANEL_BODY_LH)),
   );
+  const usable = w >= MIN_PANEL_WIDTH && h >= MIN_PANEL_HEIGHT;
   return {
     heading: {
       charsPerLine: headingCpl,
-      maxLines: PANEL_HEADING_LINES,
-      maxChars: headingCpl * PANEL_HEADING_LINES,
+      maxLines: usable ? PANEL_HEADING_LINES : 0,
+      maxChars: usable ? headingCpl * PANEL_HEADING_LINES : 0,
     },
     body: {
       charsPerLine: bodyCpl,
-      maxLines: bodyLines,
-      maxChars: bodyCpl * bodyLines,
+      maxLines: usable ? bodyLines : 0,
+      maxChars: usable ? bodyCpl * bodyLines : 0,
     },
   };
 }
 
 /** Estimated lines a string occupies at the given per-line width (wrapping by char count). */
 function linesForText(text: string, cpl: number): number {
-  return Math.max(1, Math.ceil(text.trim().length / cpl));
+  const chars = text.trim().length;
+  return chars === 0 ? 0 : Math.ceil(chars / cpl);
 }
 
 /** Estimated lines a slot's content occupies (explicit line breaks + wrapping). */
@@ -168,9 +177,12 @@ function linesUsed(content: TSlotContent, cpl: number): number {
 export function slotCharBudget(slot: ISlot): string {
   if (slot.role === "panel") {
     const { heading, body } = panelCapacity(slot.w, slot.h);
+    if (heading.maxLines === 0 || body.maxLines === 0)
+      return "no text fits this box";
     return `heading ≤${heading.maxChars} chars, body ≤${body.maxChars} chars`;
   }
   const cap = textCapacity(slot.role, slot.styleRef, slot.w, slot.h);
+  if (cap.maxLines === 0) return "no text fits this box";
   if (slot.role === "tableRow")
     return `label + value ≤${cap.maxChars} chars total`;
   return cap.maxLines > 1
@@ -201,6 +213,7 @@ function overflows(usedLines: number, maxLines: number): boolean {
 }
 
 function checkElement(element: ISlideElement, issues: Array<IFitIssue>): void {
+  if (element.role === "block") return;
   const { content } = element;
 
   if (element.role === "panel") {

@@ -1,100 +1,323 @@
 /**
- * Design-system extraction: a design PDF → the {@link ITokens} the renderer/generation consume.
- *
- * HYBRID, not all-VLM (spec §6):
- *   • Fonts are DETERMINISTIC — {@link extractFonts} reads the PDF's font info (no model).
- *   • Colors + feel are the MODEL PASS — server-side rasterization is impractical on Workers (no
- *     canvas/pdfium) and every content stream is Flate-compressed, so we take the sanctioned VLM
- *     fallback: the model reads the PDF directly (as a `file` part — no rasterizing) and reports the
- *     palette assigned to ROLE-based token names (not hue names) plus a short qualitative feel note.
- *
- * The result is assembled as `{ colors: <model>, fonts: <deterministic> }` and validated against the
- * existing {@link TokensSchema}, so it is a drop-in for the hardcoded tokens. Fonts are stitched in
- * AFTER the model call, so the model can never override them — the deterministic guarantee holds.
+ * Design-system extraction: deterministic fonts and page count plus model-derived visual details.
+ * Every PDF page receives one archetype detail call; no model decides which pages are worth keeping.
  */
-import { generateObject } from "ai";
+import {
+  NoObjectGeneratedError,
+  NoOutputGeneratedError,
+  Output,
+  generateText,
+} from "ai";
 import { z } from "zod";
-import type { ITokens } from "@/lib/slides/types";
-import { DESIGN_TOKENS, TokensSchema } from "@/lib/slides/tokens";
+import type {
+  IExtractedArchetype,
+  ITokens,
+  TArchetypeCategory,
+} from "@/lib/slides/types";
+import type { IRawExtractedArchetype } from "@/lib/extract/enhance-archetypes";
+import { ARCHETYPE_CATEGORIES } from "@/lib/slides/types";
+import { DESIGN_TOKENS } from "@/lib/slides/tokens";
+import { STYLE_REFS } from "@/lib/slides/styles";
+import { ExtractedArchetypesSchema } from "@/lib/slides/archetype-schema";
+import { getArchetype } from "@/lib/slides/archetypes";
 import { getDesignModel } from "@/lib/ai/model";
-import { withModelRetry } from "@/lib/ai/retry";
+import { runWithConcurrency } from "@/lib/ai/concurrency";
+import { isFatalProviderError, withModelRetry } from "@/lib/ai/retry";
+import { enhanceExtractedArchetypes } from "@/lib/extract/enhance-archetypes";
 import { extractFonts } from "@/lib/extract/fonts";
 
-/** What the model returns: role-based colors (reusing the token color shape) + a feel note. */
-const DesignModelSchema = z.object({
-  colors: TokensSchema.shape.colors,
-  feel: z
-    .string()
-    .describe(
-      "One or two sentences on spacing rhythm and rule/eyebrow treatment.",
-    ),
+const HexColorSchema = z.string().regex(/^#[0-9a-f]{6}$/i);
+const PaletteSchema = z.object({
+  colors: z.object({
+    primary: HexColorSchema,
+    surface: HexColorSchema,
+    accent: HexColorSchema,
+    white: HexColorSchema,
+    textDark: HexColorSchema,
+    textMuted: HexColorSchema,
+  }),
+  feel: z.string(),
 });
+
+const RawExtractedSlotSchema = z.object({
+  id: z.string(),
+  role: z.string(),
+  x: z.number(),
+  y: z.number(),
+  w: z.number(),
+  h: z.number(),
+  styleRef: z.string(),
+});
+
+const PageArchetypeSchema = z.object({
+  name: z.string().min(1).max(80),
+  category: z.enum(ARCHETYPE_CATEGORIES),
+  description: z.string().min(1).max(240),
+  slots: z.array(RawExtractedSlotSchema).min(2).max(40),
+});
+
+type TPageOutcome =
+  | { ok: true; page: number; archetype: IExtractedArchetype }
+  | { ok: false; page: number; error: unknown };
+
+interface IPageExtractionResult {
+  archetypes: Array<IExtractedArchetype>;
+  fallbackPages: Array<number>;
+}
 
 export interface IExtractedDesignSystem {
   tokens: ITokens;
-  /** Qualitative feel note (spacing rhythm, rule/eyebrow treatment) — stored alongside the tokens. */
+  archetypes: Array<IExtractedArchetype>;
   feel: string;
 }
 
-const DESIGN_SYSTEM_PROMPT = `You are a brand designer reading a corporate presentation template (PDF) to capture its design system.
+const PALETTE_SYSTEM_PROMPT = `Read the attached presentation template and report its visual design system.
 
-Report the deck's CORE palette as hex colors, each assigned to a ROLE (not a hue name):
-- primary: the dominant brand color — the full-bleed title/background and callout panels (typically a deep, saturated color).
-- surface: the light page background behind body slides.
-- accent: the highlight color used for eyebrows, rules, and key figures.
-- white: the lightest color used for text/shapes on the primary color (usually near-white).
-- textDark: the near-black color used for body text on light surfaces.
-- textMuted: the muted grey used for footers and captions.
+Return the actual six-digit hex colors for these roles: primary, surface, accent, white, textDark,
+and textMuted. Also return one or two sentences describing spacing rhythm and rule/eyebrow treatment.
+Do not return fonts, page metadata, content, or layouts.`;
+
+const PAGE_ARCHETYPE_SYSTEM_PROMPT = `Extract a reusable layout skeleton from one specified PDF page.
+
+Recreate composition, not content: every source text region becomes an empty semantic slot and no
+source-deck wording may appear. Use integer coordinates in a fixed 1440×810 canvas.
 
 Rules:
-- Use the deck's ACTUAL colors as seen in the PDF — do not invent a palette or use generic brand colors.
-- Every color MUST be a 6-digit hex string like "#0d3b5c".
-- Also give a short "feel" note: spacing rhythm and how rules/eyebrows are treated.
-- Do NOT report fonts — those are extracted separately.`;
+- Return a semantic name, category, short layout description, and ordered slots.
+- Categories are cover, section, statement, parallel-items, metrics, table, or mixed.
+- Slot ids must be descriptive kebab-case and unique.
+- Roles are logo, eyebrow, title, subtitle, heading, body, block, tableRow, panel, footer, or custom.
+- Use block for backgrounds, cards, panels, and rules; blocks receive no generated copy.
+- Preserve paint order: large backgrounds first, then smaller blocks, then text.
+- Keep every slot within the canvas.
+- Use the closest style from the supplied list; never invent a style reference.`;
 
-function buildDesignPrompt(fonts: { display?: string; body?: string }): string {
-  return `Extract the design system's color palette from the attached design deck.
+const STRUCTURED_ATTEMPTS = 2;
+const PAGE_CONCURRENCY = 2;
 
-For reference, its fonts were already extracted deterministically — display: ${fonts.display ?? "(unknown)"}; body: ${fonts.body ?? "(unknown)"}. Do not report fonts; only assign the colors to their roles and describe the feel.`;
+class StructuredValidationError extends Error {
+  constructor(message: string, cause?: unknown) {
+    super(message, { cause });
+    this.name = "StructuredValidationError";
+  }
 }
 
-/**
- * Extract the design system from a design PDF. Fonts deterministic, colors via the model reading the
- * PDF. Throws on a missing key / model failure — the caller (the extract server fn) soft-fails.
- */
-export async function extractDesignSystem(
-  pdfBytes: Uint8Array,
-): Promise<IExtractedDesignSystem> {
-  const fonts = extractFonts(pdfBytes);
+/** Count page objects directly from PDF syntax, with the page-tree Count as a fallback. */
+export function countPdfPages(pdfBytes: Uint8Array): number {
+  const source = new TextDecoder("latin1").decode(pdfBytes);
+  const pageObjects = source.match(/\/Type\s*\/Page\b/g)?.length ?? 0;
+  if (pageObjects > 0) return pageObjects;
+  const counts = [...source.matchAll(/\/Count\s+(\d+)/g)].map((match) =>
+    Number.parseInt(match[1], 10),
+  );
+  const pageCount = counts.length > 0 ? Math.max(...counts) : 0;
+  if (pageCount < 1)
+    throw new Error("Could not determine the design PDF page count.");
+  return pageCount;
+}
 
-  const { object } = await withModelRetry(() =>
-    generateObject({
+async function withStructuredRetry<TResult>(
+  run: () => Promise<TResult>,
+): Promise<TResult> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < STRUCTURED_ATTEMPTS; attempt++) {
+    try {
+      return await withModelRetry(run);
+    } catch (error) {
+      if (isFatalProviderError(error)) throw error;
+      if (
+        !NoObjectGeneratedError.isInstance(error) &&
+        !NoOutputGeneratedError.isInstance(error) &&
+        !(error instanceof StructuredValidationError)
+      ) {
+        throw error;
+      }
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
+async function extractPalette(pdfBytes: Uint8Array): Promise<{
+  colors: ITokens["colors"];
+  feel: string;
+}> {
+  return withStructuredRetry(async () => {
+    const result = await generateText({
       model: getDesignModel(),
-      schema: DesignModelSchema,
-      system: DESIGN_SYSTEM_PROMPT,
+      output: Output.object({ schema: PaletteSchema }),
+      system: PALETTE_SYSTEM_PROMPT,
       messages: [
         {
           role: "user",
           content: [
-            { type: "text", text: buildDesignPrompt(fonts) },
+            { type: "text", text: "Extract the template palette and feel." },
             { type: "file", data: pdfBytes, mediaType: "application/pdf" },
           ],
         },
       ],
-      // Transient overloads handled by withModelRetry; no SDK-level 429 backoff.
       maxRetries: 0,
-    }),
-  );
+    });
+    return result.output;
+  });
+}
 
-  // Stitch deterministic fonts in AFTER the model call — it can never override them. Missing roles
-  // (e.g. a font-less PDF) fall back to the placeholder tokens.
-  const tokens: ITokens = {
-    colors: object.colors,
-    fonts: {
-      display: fonts.display ?? DESIGN_TOKENS.fonts.display,
-      body: fonts.body ?? DESIGN_TOKENS.fonts.body,
-    },
+function buildPagePrompt(page: number): string {
+  return `Extract the layout from PDF page ${page}. Process that page only.
+
+Allowed style references:
+${STYLE_REFS.join(", ")}
+
+Style families: title/* is for dark covers; content/* is for light-slide headers; card/* is for
+comparison cards; twocol/* is for split content; stat/* is for figures; divider/* is for section
+breaks; callout/* is for statements; sidebar/* is for tables and dark side panels.`;
+}
+
+async function extractPageArchetype(
+  pdfBytes: Uint8Array,
+  page: number,
+): Promise<IExtractedArchetype> {
+  return withStructuredRetry(async () => {
+    const result = await generateText({
+      model: getDesignModel(),
+      output: Output.object({ schema: PageArchetypeSchema }),
+      system: PAGE_ARCHETYPE_SYSTEM_PROMPT,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: buildPagePrompt(page) },
+            { type: "file", data: pdfBytes, mediaType: "application/pdf" },
+          ],
+        },
+      ],
+      maxRetries: 0,
+    });
+    const detail = result.output;
+    const category: TArchetypeCategory =
+      page === 1
+        ? "cover"
+        : detail.category === "cover"
+          ? "mixed"
+          : detail.category;
+    const raw: IRawExtractedArchetype = {
+      id: `page-${page}-layout`,
+      name: detail.name,
+      category,
+      description: detail.description,
+      slots: detail.slots,
+    };
+    try {
+      return enhanceExtractedArchetypes([raw], {
+        validateCatalog: false,
+      }).archetypes[0];
+    } catch (error) {
+      throw new StructuredValidationError(
+        `Page ${page} layout was not mechanically usable.`,
+        error,
+      );
+    }
+  });
+}
+
+const CONTENT_FALLBACKS = [
+  { id: "two-column", category: "mixed" },
+  { id: "card-grid-3", category: "parallel-items" },
+  { id: "table-sidebar", category: "table" },
+  { id: "stat-3", category: "metrics" },
+  { id: "callout", category: "statement" },
+] as const;
+
+function fallbackForPage(page: number): IExtractedArchetype {
+  const fallback =
+    page === 1
+      ? { id: "title", category: "cover" as const }
+      : CONTENT_FALLBACKS[(page - 2) % CONTENT_FALLBACKS.length];
+  const archetype = getArchetype(fallback.id);
+  if (!archetype)
+    throw new Error(`Missing built-in archetype '${fallback.id}'.`);
+  return {
+    ...archetype,
+    id: `page-${page}-fallback`,
+    name: `Page ${page} fallback`,
+    category: fallback.category,
+    description: `Built-in fallback because page ${page} could not be extracted.`,
+    slots: archetype.slots.map((slot) => ({ ...slot })),
   };
+}
 
-  return { tokens, feel: object.feel };
+async function extractEveryPage(
+  pdfBytes: Uint8Array,
+  pageCount: number,
+): Promise<IPageExtractionResult> {
+  const tasks = Array.from({ length: pageCount }, (_, index) => {
+    const page = index + 1;
+    return async (): Promise<TPageOutcome> => {
+      try {
+        return {
+          ok: true,
+          page,
+          archetype: await extractPageArchetype(pdfBytes, page),
+        };
+      } catch (error) {
+        return { ok: false, page, error };
+      }
+    };
+  });
+  const archetypes: Array<IExtractedArchetype | undefined> = Array.from({
+    length: pageCount,
+  });
+  const fallbackPages: Array<number> = [];
+
+  for await (const outcome of runWithConcurrency(tasks, PAGE_CONCURRENCY)) {
+    if (outcome.ok) {
+      archetypes[outcome.page - 1] = outcome.archetype;
+      continue;
+    }
+    if (isFatalProviderError(outcome.error)) throw outcome.error;
+    archetypes[outcome.page - 1] = fallbackForPage(outcome.page);
+    fallbackPages.push(outcome.page);
+  }
+
+  if (archetypes.length === 1) archetypes.push(fallbackForPage(2));
+  return {
+    archetypes: ExtractedArchetypesSchema.parse(archetypes),
+    fallbackPages,
+  };
+}
+
+export async function extractDesignSystem(
+  pdfBytes: Uint8Array,
+): Promise<IExtractedDesignSystem> {
+  const fonts = extractFonts(pdfBytes);
+  const pageCount = countPdfPages(pdfBytes);
+  let palette: { colors: ITokens["colors"]; feel: string };
+  try {
+    palette = await extractPalette(pdfBytes);
+  } catch (error) {
+    if (isFatalProviderError(error)) throw error;
+    palette = {
+      colors: DESIGN_TOKENS.colors,
+      feel: "Palette extraction failed; default colors were used.",
+    };
+  }
+  const { archetypes, fallbackPages } = await extractEveryPage(
+    pdfBytes,
+    pageCount,
+  );
+  const fallbackNote =
+    fallbackPages.length > 0
+      ? ` Page fallbacks used for: ${fallbackPages.join(", ")}.`
+      : "";
+  return {
+    tokens: {
+      colors: palette.colors,
+      fonts: {
+        display: fonts.display ?? DESIGN_TOKENS.fonts.display,
+        body: fonts.body ?? DESIGN_TOKENS.fonts.body,
+      },
+    },
+    feel: `${palette.feel}${fallbackNote}`,
+    archetypes,
+  };
 }

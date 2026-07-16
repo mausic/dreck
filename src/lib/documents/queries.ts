@@ -7,7 +7,7 @@
  * picker — in both panels — refreshes from the same cache.
  */
 import { queryOptions } from "@tanstack/react-query";
-import type { ITokens } from "@/lib/slides/types";
+import type { IExtractedArchetype, ITokens } from "@/lib/slides/types";
 import {
   listRecentContentDocs,
   listRecentDesignDocs,
@@ -22,6 +22,7 @@ export type TDocOption = {
   sourceName: string;
   designTokens?: ITokens | null;
   designFeel?: string | null;
+  designArchetypes?: Array<IExtractedArchetype> | null;
 };
 
 /** Stable query keys for the recent-document lists, keyed by role. */

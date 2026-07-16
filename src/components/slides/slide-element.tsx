@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import type { ISlideElement, TSlotContent } from "@/lib/slides";
 import {
+  STYLE_REF,
   isLabelValue,
   isPanelContent,
   resolveStyle,
@@ -8,7 +9,7 @@ import {
 } from "@/lib/slides";
 
 /** Label (left) + right-aligned bold value — a single `tableRow`. */
-function TableRow({ content }: { content: TSlotContent }) {
+function TableRow({ content, dark }: { content: TSlotContent; dark: boolean }) {
   if (!isLabelValue(content)) return null;
   return (
     <div
@@ -26,7 +27,7 @@ function TableRow({ content }: { content: TSlotContent }) {
         style={{
           fontFamily: "var(--slide-font-display)",
           fontWeight: 700,
-          color: "var(--slide-primary)",
+          color: dark ? "var(--slide-white)" : "var(--slide-primary)",
           textAlign: "right",
         }}
       >
@@ -82,7 +83,12 @@ function TextContent({ content }: { content: TSlotContent }) {
 function ElementContent({ element }: { element: ISlideElement }) {
   switch (element.role) {
     case "tableRow":
-      return <TableRow content={element.content} />;
+      return (
+        <TableRow
+          content={element.content}
+          dark={element.styleRef === STYLE_REF.sidebarDarkRow}
+        />
+      );
     case "panel":
       return <PanelBlock content={element.content} />;
     case "block":

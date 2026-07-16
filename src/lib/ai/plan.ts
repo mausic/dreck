@@ -10,6 +10,7 @@
  */
 import { generateObject } from "ai";
 import type { ISection } from "@/lib/extract/section";
+import type { IArchetypeDescriptor } from "@/lib/slides/types";
 import type { TSlidePlan } from "@/lib/ai/generate-schema";
 import type { TDocOverview } from "@/lib/ai/sections";
 import { MAX_SLIDES, SlidePlanSchema } from "@/lib/ai/generate-schema";
@@ -21,7 +22,7 @@ import { withModelRetry } from "@/lib/ai/retry";
 export async function planDeck(
   brief: string,
   overview: TDocOverview,
-  archetypeIds: Array<string>,
+  archetypes: Array<IArchetypeDescriptor>,
 ): Promise<TSlidePlan> {
   // Class-aware retry (see retry.ts): quick backoff for a transient overload, none for a
   // rate-limit wall. SDK-level retry is off so it never does the provider's long 429 wait.
@@ -30,7 +31,7 @@ export async function planDeck(
       model: getGenerateModel(),
       schema: SlidePlanSchema,
       system: PLAN_SYSTEM_PROMPT,
-      prompt: buildPlanPrompt(brief, overview, archetypeIds),
+      prompt: buildPlanPrompt(brief, overview, archetypes),
       maxRetries: 0,
     }),
   );

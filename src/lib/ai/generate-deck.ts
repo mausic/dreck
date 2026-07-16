@@ -8,13 +8,18 @@
  *
  * Robustness mirrors the edit/extract seams: the generator never throws to the client. A missing
  * key, a bad document id, a DB error, or a per-slide failure all become `error` events; the deck
- * keeps going where it can. Design tokens/archetypes are the hardcoded set for now, consumed via
- * the stable archetype interface so real extraction swaps in behind it later.
+ * keeps going where it can. A selected design document supplies a request-scoped extracted
+ * archetype catalog; existing documents without one continue through the built-in catalog.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { desc, eq } from "drizzle-orm";
 import type { ISection } from "@/lib/extract/section";
-import type { ISlide, ITokens } from "@/lib/slides/types";
+import type {
+  IArchetype,
+  IExtractedArchetype,
+  ISlide,
+  ITokens,
+} from "@/lib/slides/types";
 import type {
   IGroundingReport,
   IWireSlide,
@@ -25,11 +30,18 @@ import type {
 } from "@/lib/ai/generate-schema";
 import { getDb } from "@/db/client";
 import { decks, documents, slides } from "@/db/schema";
-import { ARCHETYPE_FAMILIES, getArchetype } from "@/lib/slides/archetypes";
+import {
+  ARCHETYPE_FAMILY_DESCRIPTORS,
+  getArchetype,
+} from "@/lib/slides/archetypes";
+import { ExtractedArchetypesSchema } from "@/lib/slides/archetype-schema";
 import { DESIGN_TOKENS } from "@/lib/slides/tokens";
 import { GenerateDeckInputSchema } from "@/lib/ai/generate-schema";
 import { fallbackPlan, planDeck } from "@/lib/ai/plan";
-import { planArchetypes } from "@/lib/ai/pick-archetype";
+import {
+  planArchetypes,
+  planExtractedArchetypes,
+} from "@/lib/ai/pick-archetype";
 import { fillSlide } from "@/lib/ai/fill";
 import { verifySlideGrounding } from "@/lib/ai/grounding";
 import { describeFitIssues, verifySlideFit } from "@/lib/ai/fit";
@@ -38,8 +50,26 @@ import { describeGroundingIssues } from "@/lib/ai/generate-prompt";
 import { fatalProviderMessage, isFatalProviderError } from "@/lib/ai/retry";
 import { runWithConcurrency } from "@/lib/ai/concurrency";
 import { getConfig } from "@/lib/config";
+import { enhanceExtractedArchetypes } from "@/lib/extract/enhance-archetypes";
 
 type TDb = ReturnType<typeof getDb>;
+
+interface IDeckDesign {
+  tokens: ITokens;
+  archetypes: Array<IExtractedArchetype> | null;
+}
+
+function prepareStoredArchetypes(
+  value: unknown,
+): Array<IExtractedArchetype> | null {
+  const parsed = ExtractedArchetypesSchema.safeParse(value);
+  if (!parsed.success) return null;
+  try {
+    return enhanceExtractedArchetypes(parsed.data).archetypes;
+  } catch {
+    return null;
+  }
+}
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Generation failed.";
@@ -73,24 +103,34 @@ async function loadContentDocument(
 }
 
 /**
- * Resolve the design tokens for a deck: the extracted design system cached on the chosen design
- * document, or the hardcoded fallback when none is selected / it wasn't extracted. Never throws —
- * a bad id or a content doc simply falls back, so styling can't break generation.
+ * Resolve the cached design system for a deck. Existing design rows without extracted archetypes
+ * keep their tokens and use the built-in catalog.
  */
-async function loadDesignTokens(
+async function loadDeckDesign(
   db: TDb,
   designDocId: string | undefined,
-): Promise<ITokens> {
-  if (!designDocId) return DESIGN_TOKENS;
+): Promise<IDeckDesign> {
+  const fallback: IDeckDesign = { tokens: DESIGN_TOKENS, archetypes: null };
+  if (!designDocId) return fallback;
   try {
     const rows = await db
-      .select({ designTokens: documents.designTokens })
+      .select({
+        role: documents.role,
+        designTokens: documents.designTokens,
+        designArchetypes: documents.designArchetypes,
+      })
       .from(documents)
       .where(eq(documents.id, designDocId))
       .limit(1);
-    return rows[0]?.designTokens ?? DESIGN_TOKENS;
+    if (rows.length === 0) return fallback;
+    const row = rows[0];
+    if (row.role !== "design") return fallback;
+    return {
+      tokens: row.designTokens ?? DESIGN_TOKENS,
+      archetypes: prepareStoredArchetypes(row.designArchetypes),
+    };
   } catch {
-    return DESIGN_TOKENS;
+    return fallback;
   }
 }
 
@@ -152,17 +192,16 @@ async function buildOneSlide(args: {
   slideId: string;
   item: TSlidePlanItem;
   sections: Array<ISection>;
-  archetypeId: string;
+  archetype: IArchetype;
   markdown: string;
   tokens: ITokens;
 }): Promise<{ slide: IWireSlide; grounding: IGroundingReport }> {
   const generationConfig = getConfig().generation;
-  const archetype = getArchetype(args.archetypeId);
   const base = {
     slideId: args.slideId,
     intent: args.item.intent,
     title: args.item.title,
-    archetype,
+    archetype: args.archetype,
     sections: args.sections,
     tokens: args.tokens,
   };
@@ -210,7 +249,7 @@ async function generateSlideTask(
   index: number,
   item: TSlidePlanItem,
   sections: Array<ISection>,
-  archetypeId: string,
+  archetype: IArchetype,
   markdown: string,
   tokens: ITokens,
 ): Promise<TSlideOutcome> {
@@ -219,7 +258,7 @@ async function generateSlideTask(
       slideId: `${deckId}-s${index + 1}`,
       item,
       sections,
-      archetypeId,
+      archetype,
       markdown,
       tokens,
     });
@@ -240,18 +279,17 @@ export const generateDeck = createServerFn({ method: "POST" })
   .handler(async function* ({ data }): AsyncGenerator<TGenerationEvent> {
     let db: TDb;
     let doc: { markdown: string; sections: Array<ISection> };
-    let tokens: ITokens;
+    let design: IDeckDesign;
     try {
       db = getDb();
       doc = await loadContentDocument(db, data.contentDocId);
-      // Extracted design system for the chosen design PDF (cached), or the fallback tokens.
-      tokens = await loadDesignTokens(db, data.designDocId);
+      design = await loadDeckDesign(db, data.designDocId);
     } catch (error) {
       yield { type: "error", message: errorMessage(error) };
       return;
     }
 
-    const familyIds = [...ARCHETYPE_FAMILIES];
+    const plannerArchetypes = design.archetypes ?? ARCHETYPE_FAMILY_DESCRIPTORS;
 
     // Plan (one model call) with a deterministic fallback — a planner hiccup never breaks gen.
     // But a fatal provider error (quota/auth) would doom every fill too, so abort now with a
@@ -261,7 +299,7 @@ export const generateDeck = createServerFn({ method: "POST" })
       plan = await planDeck(
         data.prompt,
         summarizeSections(doc.sections),
-        familyIds,
+        plannerArchetypes,
       );
       if (plan.slides.length === 0) plan = fallbackPlan(doc.sections);
     } catch (error) {
@@ -281,7 +319,7 @@ export const generateDeck = createServerFn({ method: "POST" })
     }
     // The plan event carries the resolved design tokens so the client styles the deck with the
     // extracted design system (fonts/palette) as slides stream in.
-    yield { type: "plan", deckId, plan, tokens };
+    yield { type: "plan", deckId, plan, tokens: design.tokens };
 
     // Generate the slides with bounded concurrency (GENERATE_CONCURRENCY in flight), emitting each
     // as it completes. The tasks are total, so the pool never throws; a fatal provider wall hits
@@ -294,7 +332,13 @@ export const generateDeck = createServerFn({ method: "POST" })
       index,
       sections: selectSections(doc.sections, item.sectionIds),
     }));
-    const archetypeIds = planArchetypes(perSlide);
+    const resolvedArchetypes: Array<IArchetype> = design.archetypes
+      ? planExtractedArchetypes(perSlide, design.archetypes)
+      : planArchetypes(perSlide).map((id) => {
+          const archetype = getArchetype(id);
+          if (!archetype) throw new Error(`Unknown built-in archetype: ${id}`);
+          return archetype;
+        });
 
     const tasks = perSlide.map(
       (slide, i) => () =>
@@ -304,9 +348,9 @@ export const generateDeck = createServerFn({ method: "POST" })
           slide.index,
           slide.item,
           slide.sections,
-          archetypeIds[i],
+          resolvedArchetypes[i],
           doc.markdown,
-          tokens,
+          design.tokens,
         ),
     );
     const generationConfig = getConfig().generation;
@@ -367,12 +411,19 @@ export const listRecentDesignDocs = createServerFn({ method: "GET" }).handler(
           sourceName: documents.sourceName,
           designTokens: documents.designTokens,
           designFeel: documents.designFeel,
+          designArchetypes: documents.designArchetypes,
         })
         .from(documents)
         .where(eq(documents.role, "design"))
         .orderBy(desc(documents.createdAt))
         .limit(20);
-      return { ok: true as const, docs };
+      return {
+        ok: true as const,
+        docs: docs.map((doc) => ({
+          ...doc,
+          designArchetypes: prepareStoredArchetypes(doc.designArchetypes),
+        })),
+      };
     } catch (error) {
       return { ok: false as const, error: errorMessage(error) };
     }

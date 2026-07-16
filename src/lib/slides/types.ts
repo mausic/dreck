@@ -14,23 +14,21 @@
 /** The canonical slide space. Every x/y/w/h below is expressed in these units. */
 export const CANVAS = { width: 1440, height: 810 } as const;
 
-/**
- * A role a slot/element plays. The named members aid styling and hit-testing;
- * `custom` is the open catch-all so a role emitted by design-system extraction
- * (which reads arbitrary design PDFs) still types and renders sensibly.
- */
-export type TSlotRole =
-  | "logo"
-  | "eyebrow"
-  | "title"
-  | "subtitle"
-  | "heading"
-  | "body"
-  | "block"
-  | "tableRow"
-  | "panel"
-  | "footer"
-  | "custom";
+/** Roles extraction may assign to a slot. Unknown semantics normalize to `custom`. */
+export const SLOT_ROLES = [
+  "logo",
+  "eyebrow",
+  "title",
+  "subtitle",
+  "heading",
+  "body",
+  "block",
+  "tableRow",
+  "panel",
+  "footer",
+  "custom",
+] as const;
+export type TSlotRole = (typeof SLOT_ROLES)[number];
 
 /**
  * A layout skeleton's name/label — free-form, not an enum. Extraction reads
@@ -38,6 +36,18 @@ export type TSlotRole =
  * of time, so this stays an open string.
  */
 export type TArchetypeId = string;
+
+/** Coarse content shape used to describe extracted layouts to the planner. */
+export const ARCHETYPE_CATEGORIES = [
+  "cover",
+  "section",
+  "statement",
+  "parallel-items",
+  "metrics",
+  "table",
+  "mixed",
+] as const;
+export type TArchetypeCategory = (typeof ARCHETYPE_CATEGORIES)[number];
 
 /** How an element arranges its own children, when it has any. */
 export type TSlotLayout = "stack" | "grid" | "centered";
@@ -82,6 +92,20 @@ export interface IArchetype {
   id: TArchetypeId;
   name: string;
   slots: Array<ISlot>;
+}
+
+/** Planner-facing metadata shared by built-in families and extracted archetypes. */
+export interface IArchetypeDescriptor {
+  id: TArchetypeId;
+  name: string;
+  category: TArchetypeCategory;
+  description: string;
+}
+
+/** A validated layout skeleton extracted from a design PDF. */
+export interface IExtractedArchetype extends IArchetype {
+  category: TArchetypeCategory;
+  description: string;
 }
 
 /** A label/value pair — content for a `tableRow` element. */

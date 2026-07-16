@@ -10,38 +10,37 @@
  * orchestrator (`generate-deck.ts`) owns the loop.
  */
 import type { ISection } from "@/lib/extract/section";
-import type { IArchetype, ISlot, ITokens, TSlotRole } from "@/lib/slides/types";
+import type {
+  IArchetype,
+  IArchetypeDescriptor,
+  ISlot,
+  ITokens,
+  TSlotRole,
+} from "@/lib/slides/types";
 import type { IGroundingIssue } from "@/lib/ai/generate-schema";
 import type { TDocOverview } from "@/lib/ai/sections";
 import { slotCharBudget } from "@/lib/ai/fit";
 
 /** Bump when wording below changes materially, so runs stay attributable. */
-export const PLAN_PROMPT_VERSION = "plan/v3";
+export const PLAN_PROMPT_VERSION = "plan/v4";
 export const FILL_PROMPT_VERSION = "fill/v1";
 
 /** System policy for the planner: turn a brief into a right-sized, section-grounded plan. */
-export const PLAN_SYSTEM_PROMPT = `You are a presentation planner for a corporate slide deck. You decide, for each slide, both what it covers AND which layout (archetype) presents it best. Choosing the layout is a core part of your job, not an afterthought.
+export const PLAN_SYSTEM_PROMPT = `You are a presentation planner for a corporate slide deck. You decide, for each slide, both what it covers AND which available layout (archetype) presents it best. Choosing the layout is a core part of your job, not an afterthought.
 
 You are given the user's brief and a compact overview of a source document (a list of sections, each with an id, title, kind, and a short snippet).
 
 Slide plan:
 - Let the BRIEF drive the number of slides. If the brief names N distinct topics, produce about N slides — one per topic. Do not pad the deck or force a fixed count.
-- Slide 1 is ALWAYS the cover: archetypeId "title", no sections.
+- Slide 1 is ALWAYS the cover: choose an available archetype whose category is "cover", with no sections.
 - For each other slide choose the section id(s) whose content best supports it (a small, focused set). Write a short intent and a working title. Only reference section ids from the overview; invent nothing.
 
-Choose an archetypeId for EVERY slide — never leave it blank. Match the SHAPE of the slide's content:
-- "title" — the opening cover only (slide 1).
-- "card-grid" — 2–4 parallel, comparable items shown side by side (product forms, options, patient groups, categories). Use this whenever a section lists a few comparable things.
-- "stat" — the message is 1–3 headline NUMBERS (a percentage, a dose, a duration) with little surrounding text.
-- "two-column" — a list of points PLUS a paragraph that explains or frames them.
-- "table-sidebar" — many label→value pairs or a data table (e.g. weight→dose rows).
-- "callout" — a single strong statement: a key warning, a caution, a takeaway, or a quote.
-- "section-divider" — a pure transition / part break with almost no content.
+Choose an archetypeId for EVERY slide from the exact ids in the available-archetype list. Match its category and description to the SHAPE of the content: parallel-items for comparable items, metrics for headline numbers, mixed for lists plus prose, table for label-value data, statement for one key message, and section for a transition.
 
 How to choose well:
-- Actively look for chances to use card-grid, stat and callout — they make the deck varied and scannable. Before defaulting to a list, ask: are these comparable items (card-grid)? is there a headline number (stat)? is there a warning or key message (callout)?
+- Actively look for chances to use parallel-items, metrics, and statement layouts — they make the deck varied and scannable.
 - VARY the layouts. Do NOT use the same archetype on more than two slides unless the content truly leaves no alternative. A deck where most slides share one layout is wrong — spread the layouts out.
-- The system keeps any choice that is structurally viable for the content and only overrides one that is impossible (e.g. "stat" with no numbers, "card-grid" with fewer than two items). So choose deliberately: a viable choice is always honored.
+- The system validates your choice against the available catalog and basic content shape, overriding missing or structurally incompatible ids. Choose deliberately: a viable choice is honored.
 - You may pick a slide's section(s) partly to enable a more distinctive layout, as long as they fit the slide's intent.
 
 Respond with { "slides": [{ "intent", "title", "sectionIds", "archetypeId" }, ...] } in reading order.`;
@@ -50,7 +49,7 @@ Respond with { "slides": [{ "intent", "title", "sectionIds", "archetypeId" }, ..
 export function buildPlanPrompt(
   brief: string,
   overview: TDocOverview,
-  archetypeIds: Array<string>,
+  archetypes: Array<IArchetypeDescriptor>,
 ): string {
   const sections =
     overview.length > 0
@@ -64,9 +63,17 @@ export function buildPlanPrompt(
           .join("\n")
       : "(no sections extracted)";
 
+  const available = archetypes
+    .map(
+      (archetype) =>
+        `- id: ${archetype.id} | category: ${archetype.category} | name: ${archetype.name}\n    ${archetype.description}`,
+    )
+    .join("\n");
+
   return `Brief: ${brief}
 
-Available archetype families: ${archetypeIds.join(", ") || "(none)"}
+Available archetypes (use these exact ids only):
+${available || "(none)"}
 
 Document overview (choose section ids from these only):
 ${sections}`;
