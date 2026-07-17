@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 
 export function NotFound() {
   return (
@@ -11,9 +11,9 @@ export function NotFound() {
         The page you&apos;re looking for doesn&apos;t exist or may have been
         moved.
       </p>
-      <Button render={<Link to="/" />} className="mt-2">
+      <Link to="/" className={buttonVariants({ className: "mt-2" })}>
         Back to dashboard
-      </Button>
+      </Link>
     </div>
   );
 }

@@ -8,7 +8,7 @@ import type { TStoredDeckView } from "@/lib/decks/schema";
 import { AppShell } from "@/components/app-shell";
 import { DeckView } from "@/components/slides/deck-view";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { deckQueryOptions } from "@/lib/decks/queries";
 
 export const Route = createFileRoute("/decks/$deckId")({
@@ -113,9 +113,9 @@ function GeneratedDeckPage() {
               Source: {deck.contentSourceName}
             </p>
           </div>
-          <Button variant="outline" render={<Link to="/decks" />}>
+          <Link to="/decks" className={buttonVariants({ variant: "outline" })}>
             Back to decks
-          </Button>
+          </Link>
         </div>
 
         {deck.error && (

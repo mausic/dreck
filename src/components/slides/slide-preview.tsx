@@ -3,6 +3,7 @@ import type { CSSProperties, PointerEvent } from "react";
 import type { IRect, ISlide, ITokens } from "@/lib/slides";
 import { CANVAS, previewRectToCanonical } from "@/lib/slides";
 import { useCanvasScale } from "@/hooks/use-canvas-scale";
+import { useGoogleFonts } from "@/hooks/use-google-fonts";
 import { SlideElementView } from "@/components/slides/slide-element";
 import { cn } from "@/lib/utils";
 
@@ -50,6 +51,7 @@ export function SlidePreview({
   onSelectRect,
 }: ISlidePreviewProps) {
   const { ref, scale, rendered, ready } = useCanvasScale<HTMLDivElement>();
+  const fontsReady = useGoogleFonts(tokens.fonts.display, tokens.fonts.body);
   const [drag, setDrag] = useState<IDrag | null>(null);
   const interactive = Boolean(onSelectRect);
 
@@ -159,7 +161,7 @@ export function SlidePreview({
           width: rendered.width,
           height: rendered.height,
           transform: "translate(-50%, -50%)",
-          visibility: ready ? "visible" : "hidden",
+          visibility: ready && fontsReady ? "visible" : "hidden",
         }}
       >
         <div style={stageStyle}>
