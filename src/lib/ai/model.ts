@@ -2,6 +2,8 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import type { LanguageModel } from "ai";
 import { getConfig } from "@/lib/config";
 
+export const MODEL_TIMEOUT_MS = 60_000;
+
 export const getEditModel = (): LanguageModel => {
   const config = getConfig();
   return createGoogleGenerativeAI({

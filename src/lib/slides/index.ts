@@ -7,3 +7,4 @@ export * from "@/lib/slides/archetype-schema";
 export * from "@/lib/slides/content";
 export * from "@/lib/slides/geometry";
 export * from "@/lib/slides/edit";
+export * from "@/lib/slides/slide-schema";

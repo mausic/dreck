@@ -1,15 +1,3 @@
-/**
- * Deterministic text-fit estimation for slide slots.
- *
- * Slide elements render into fixed canonical boxes with `overflow: hidden`, so text that is too
- * long clips mid-word. There's no layout engine server-side, so this module APPROXIMATES fit
- * from font metrics (read off the resolved style preset): glyph advance ≈ `fontSize × RATIO`
- * (+ letter-spacing), and a line ≈ `fontSize × lineHeight` tall. From that it derives, per slot,
- * a character budget (fed into the fill prompt so the model writes to length) and a fit check
- * (run after fill so an overflowing slide can be regenerated — same verify→retry pattern as
- * grounding). The estimate is intentionally lenient (the `GENERATE_FIT_TOLERANCE` knob) so only
- * clear overflow triggers a regenerate. Ratio/tolerance are env-tunable if budgets feel off.
- */
 import type { CSSProperties } from "react";
 import type {
   ISlide,
@@ -22,15 +10,10 @@ import { resolveStyle } from "@/lib/slides/styles";
 import { isLabelValue, isPanelContent } from "@/lib/slides/content";
 import { getConfig } from "@/lib/config";
 
-// The two calibration tunables — glyph-width ratio and overflow tolerance — are env-configurable
-// (see config.ts); read on use so a deploy can retune without a code change.
-/** Uppercase runs a touch wider; added to the ratio for `text-transform: uppercase` slots. */
 const UPPERCASE_EXTRA = 0.06;
 const DEFAULT_LINE_HEIGHT = 1.25;
 const DEFAULT_FONT_SIZE = 24;
 
-// Panel content is nested (heading + body) with its own sizes — mirror styles.ts `sidebarPanel`
-// padding and slide-element.tsx `PanelBlock`.
 const PANEL_PAD_X = 46;
 const PANEL_PAD_Y = 44;
 const PANEL_GAP = 18;
@@ -47,7 +30,6 @@ export const MIN_PANEL_HEIGHT = Math.ceil(
     PANEL_BODY_FS * PANEL_BODY_LH,
 );
 
-/** Estimated room in a box: how many characters per line and how many lines fit. */
 export interface ICapacity {
   charsPerLine: number;
   maxLines: number;
@@ -99,7 +81,6 @@ function linesForHeight(
   return Math.max(0, Math.floor(heightPx / (fontSize * lineHeight)));
 }
 
-/** Capacity of a plain text slot, from its resolved style + box. `tableRow` is one line. */
 export function textCapacity(
   role: TSlotRole,
   styleRef: string,
@@ -154,13 +135,11 @@ function panelCapacity(
   };
 }
 
-/** Estimated lines a string occupies at the given per-line width (wrapping by char count). */
 function linesForText(text: string, cpl: number): number {
   const chars = text.trim().length;
   return chars === 0 ? 0 : Math.ceil(chars / cpl);
 }
 
-/** Estimated lines a slot's content occupies (explicit line breaks + wrapping). */
 function linesUsed(content: TSlotContent, cpl: number): number {
   if (typeof content === "string") return linesForText(content, cpl);
   if (Array.isArray(content))
@@ -170,10 +149,6 @@ function linesUsed(content: TSlotContent, cpl: number): number {
   return 1;
 }
 
-/**
- * A human-readable character budget for one slot, for the fill prompt (so the model writes to
- * length). Panels get a heading + body budget; table rows a combined budget; text a total.
- */
 export function slotCharBudget(slot: ISlot): string {
   if (slot.role === "panel") {
     const { heading, body } = panelCapacity(slot.w, slot.h);
@@ -190,7 +165,6 @@ export function slotCharBudget(slot: ISlot): string {
     : `≤${cap.maxChars} chars (one line)`;
 }
 
-/** One element whose text is estimated to overflow its box. */
 export interface IFitIssue {
   elementId: string;
   slotId: string;
@@ -201,7 +175,6 @@ export interface IFitIssue {
   maxChars: number;
 }
 
-/** The fit step's report for one slide. `ok` means nothing is estimated to overflow. */
 export interface IFitReport {
   ok: boolean;
   issues: Array<IFitIssue>;
@@ -277,17 +250,12 @@ function checkElement(element: ISlideElement, issues: Array<IFitIssue>): void {
   }
 }
 
-/**
- * Estimate whether every element's text fits its box. Returns the overflowing slots (with their
- * char count vs budget). Pure and model-free — cheap to run on every fill + retry.
- */
 export function verifySlideFit(slide: ISlide): IFitReport {
   const issues: Array<IFitIssue> = [];
   for (const element of slide.elements) checkElement(element, issues);
   return { ok: issues.length === 0, issues };
 }
 
-/** Render fit issues into a short note the retry pass can act on (keyed by slot id). */
 export function describeFitIssues(issues: Array<IFitIssue>): string {
   return issues
     .map((issue) => {

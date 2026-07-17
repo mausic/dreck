@@ -10,7 +10,7 @@ GOOGLE_GENERATIVE_AI_API_KEY=
 # Optional: override the fast generation model (planning + fill; defaults to `gemini-3.5-flash`).
 # GENERATE_MODEL=gemini-3.5-flash
 
-# Optional: generation tuning knobs (see src/lib/ai/config.ts). Each falls back to the default
+# Optional: generation tuning knobs (see src/lib/config/generate-config.ts). Each falls back to the default
 # shown if unset or if the value is invalid / out of the range noted, so leaving them unset is fine.
 # GENERATE_CONCURRENCY=5              # max slide fills in flight at once (1–16)
 # GENERATE_FILL_RETRIES=1            # regenerate budget per ungrounded/overflowing slide (0–5)
@@ -27,6 +27,6 @@ MISTRAL_API_KEY=
 # MISTRAL_OCR_MODEL=mistral-ocr-latest
 
 # Postgres (Neon) connection string for Drizzle, over the Neon HTTP driver.
-# The Worker reads this at runtime; drizzle-kit (`pnpm db:push`) reads it from the shell
-# env / .env, not from this file — export it there too when pushing the schema.
+# The Worker reads this at runtime. drizzle-kit reads it from this file as well, with the
+# shell environment as a fallback for CI and other non-local tooling.
 DATABASE_URL=postgresql://neondb_owner:...

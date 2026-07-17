@@ -8,7 +8,6 @@ import {
   toLines,
 } from "@/lib/slides";
 
-/** Label (left) + right-aligned bold value — a single `tableRow`. */
 function TableRow({ content, dark }: { content: TSlotContent; dark: boolean }) {
   if (!isLabelValue(content)) return null;
   return (
@@ -37,7 +36,6 @@ function TableRow({ content, dark }: { content: TSlotContent; dark: boolean }) {
   );
 }
 
-/** Primary-colored callout: heading + body. Box styling comes from the element preset. */
 function PanelBlock({ content }: { content: TSlotContent }) {
   if (!isPanelContent(content)) return null;
   return (
@@ -66,7 +64,6 @@ function PanelBlock({ content }: { content: TSlotContent }) {
   );
 }
 
-/** One or more text lines, stacked. Vertical alignment comes from the element preset. */
 function TextContent({ content }: { content: TSlotContent }) {
   const lines = toLines(content);
   if (lines.length === 0) return null;
@@ -79,7 +76,6 @@ function TextContent({ content }: { content: TSlotContent }) {
   );
 }
 
-/** Route a filled element to the content renderer for its role (block renders nothing). */
 function ElementContent({ element }: { element: ISlideElement }) {
   switch (element.role) {
     case "tableRow":
@@ -102,15 +98,6 @@ function ElementContent({ element }: { element: ISlideElement }) {
   }
 }
 
-/**
- * Renders a single slide element as an absolutely-positioned box at its CANONICAL
- * {x,y,w,h}. Because the parent stage is sized 1440×810 and scaled as a whole, these
- * canonical numbers are used directly as pixels here — no per-element scaling.
- *
- * When `selected`, an outline ring marks it as hit by the current selection rectangle.
- * The ring is drawn in canonical px (like everything else on the stage) so it scales
- * with the preview; `outline` sits outside the box and is not clipped by `overflow`.
- */
 export function SlideElementView({
   element,
   selected = false,
@@ -130,8 +117,6 @@ export function SlideElementView({
       ? {
           outline: "3px solid var(--slide-selection, #2563eb)",
           outlineOffset: "-1px",
-          // Large inset spread = a flat translucent fill, clipped to THIS element
-          // (below its content), so multi-select tints each box without stacking.
           boxShadow:
             "inset 0 0 0 9999px color-mix(in srgb, #2563eb 14%, transparent)",
         }

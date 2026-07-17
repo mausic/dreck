@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { TDocOption } from "@/lib/documents/queries";
 import { documentsKeys } from "@/lib/documents/queries";
 import { extractDocument } from "@/lib/extract/extract-document";
+import { MAX_PDF_BYTES } from "@/lib/extract/extract-schema";
 import { cn } from "@/lib/utils";
 import { FileDropzone } from "@/components/ui/dropzone";
 import {
@@ -18,16 +19,17 @@ type TDocumentSelectProps = {
   onValueChange: (value: string) => void;
   docs: Array<TDocOption>;
   placeholder?: string;
-  noneLabel?: string;
+  emptyLabel?: string;
   disabled?: boolean;
   id?: string;
   ariaLabel?: string;
+  ariaDescribedBy?: string;
+  ariaInvalid?: boolean;
   className?: string;
 };
 
-/** The list-item / trigger label for a document: its filename + a short id. */
 function docLabel(doc: TDocOption): string {
-  return `${doc.sourceName} · ${doc.id.slice(0, 8)}`;
+  return doc.sourceName;
 }
 
 export function DocumentSelect({
@@ -35,10 +37,12 @@ export function DocumentSelect({
   onValueChange,
   docs,
   placeholder = "Select a document…",
-  noneLabel,
+  emptyLabel,
   disabled,
   id,
   ariaLabel,
+  ariaDescribedBy,
+  ariaInvalid,
   className,
 }: TDocumentSelectProps) {
   return (
@@ -50,18 +54,19 @@ export function DocumentSelect({
       <SelectTrigger
         id={id}
         aria-label={ariaLabel}
+        aria-describedby={ariaDescribedBy}
+        aria-invalid={ariaInvalid}
         className={cn("w-full", className)}
       >
         <SelectValue placeholder={placeholder}>
           {(selected: string | null) => {
-            if (selected == null) return noneLabel ?? placeholder;
+            if (selected == null) return emptyLabel ?? placeholder;
             const doc = docs.find((d) => d.id === selected);
             return doc ? docLabel(doc) : selected;
           }}
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
-        {noneLabel != null && <SelectItem value={null}>{noneLabel}</SelectItem>}
         {docs.map((doc) => (
           <SelectItem key={doc.id} value={doc.id}>
             {docLabel(doc)}
@@ -72,7 +77,6 @@ export function DocumentSelect({
   );
 }
 
-/** In-flight upload for a `DocumentPicker`: the chosen file, whether extraction is running, error. */
 type TUploadState = {
   file: File | null;
   pending: boolean;
@@ -111,19 +115,14 @@ type TDocumentPickerProps = {
   /** Helper line shown in the dropzone's empty state. */
   hint: string;
   placeholder?: string;
-  noneLabel?: string;
+  emptyLabel?: string;
   /** Id for the select trigger (or the dropzone when there is nothing to select yet). */
   id?: string;
   ariaLabel?: string;
+  ariaDescribedBy?: string;
+  ariaInvalid?: boolean;
 };
 
-/**
- * `DocumentPicker` — select an existing document or upload a new PDF, in one control.
- *
- * The list picker appears once the shared cache has documents of this role; below it, the dropzone
- * accepts a new PDF. On a successful upload the new document is folded into the cache (so it shows
- * in the list) and selected via `onValueChange`, so the form field immediately reflects it.
- */
 export function DocumentPicker({
   role,
   value,
@@ -131,9 +130,11 @@ export function DocumentPicker({
   docs,
   hint,
   placeholder,
-  noneLabel,
+  emptyLabel,
   id,
   ariaLabel,
+  ariaDescribedBy,
+  ariaInvalid,
 }: TDocumentPickerProps) {
   const queryClient = useQueryClient();
   const [upload, setUpload] = useState<TUploadState>(EMPTY_UPLOAD);
@@ -141,6 +142,25 @@ export function DocumentPicker({
 
   /** Extract the dropped file, fold the new doc into the shared cache, and select it. */
   async function runExtract(file: File) {
+    if (file.size > MAX_PDF_BYTES) {
+      setUpload({
+        file,
+        pending: false,
+        error: `PDF exceeds the ${MAX_PDF_BYTES / 1_000_000} MB upload limit.`,
+      });
+      return;
+    }
+    if (
+      file.type !== "application/pdf" &&
+      !file.name.toLowerCase().endsWith(".pdf")
+    ) {
+      setUpload({
+        file,
+        pending: false,
+        error: "Only PDF files can be uploaded.",
+      });
+      return;
+    }
     setUpload({ file, pending: true, error: null });
     try {
       const pdfBase64 = await readAsBase64(file);
@@ -193,11 +213,13 @@ export function DocumentPicker({
           <DocumentSelect
             id={id}
             ariaLabel={ariaLabel}
+            ariaDescribedBy={ariaDescribedBy}
+            ariaInvalid={ariaInvalid}
             value={value}
             onValueChange={onValueChange}
             docs={docs}
             placeholder={placeholder}
-            noneLabel={noneLabel}
+            emptyLabel={emptyLabel}
             disabled={upload.pending}
           />
           <div className="text-muted-foreground flex items-center gap-2 text-xs">
@@ -218,10 +240,15 @@ export function DocumentPicker({
         pending={upload.pending}
         status={upload.pending ? "Extracting…" : null}
         onFileSelect={handleFile}
+        ariaDescribedBy={ariaDescribedBy}
+        ariaInvalid={ariaInvalid}
       />
 
       {upload.error && (
-        <p className="border-destructive/50 text-destructive rounded-md border p-3 text-sm">
+        <p
+          role="alert"
+          className="border-destructive/50 text-destructive rounded-md border p-3 text-sm"
+        >
           {upload.error}
         </p>
       )}

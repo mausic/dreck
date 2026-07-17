@@ -60,4 +60,20 @@ describe("runWithConcurrency", () => {
     ).toEqual(["only"]);
     expect(await collect(runWithConcurrency([], 5))).toEqual([]);
   });
+
+  it("stops launching new work while draining tasks already in flight", async () => {
+    let launched = 0;
+    const thunks = Array.from({ length: 5 }, (_, index) => async () => {
+      launched += 1;
+      await new Promise((resolve) => setTimeout(resolve, index === 0 ? 1 : 10));
+      return index;
+    });
+
+    const out = await collect(
+      runWithConcurrency(thunks, 2, (value) => value !== 0),
+    );
+
+    expect(launched).toBe(2);
+    expect(out.slice().sort()).toEqual([0, 1]);
+  });
 });

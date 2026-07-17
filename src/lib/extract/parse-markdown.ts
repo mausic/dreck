@@ -1,22 +1,8 @@
-/**
- * Stage 2 of extraction: deterministic markdown → generic {@link ISection} tree.
- *
- * No LLM, no rewriting. The heading structure of the markdown (ATX `#`…`######`) is the
- * only signal; each section's `content` is the verbatim body under its heading, up to the
- * first deeper heading. Determinism is the point: "content comes only from the PDF" and a
- * later grounding step both depend on section bodies being byte-faithful to the markdown.
- *
- * Tables need no special handling — a markdown table is just a run of body lines that
- * flows verbatim into the enclosing section, rows and all.
- */
 import type { ISection } from "@/lib/extract/section";
 
-/** ATX heading: up to 3 leading spaces, 1–6 `#`, at least one space, text, optional closing `#`s. */
 const HEADING_RE = /^ {0,3}(#{1,6})[ \t]+(.*?)[ \t]*#*[ \t]*$/;
-/** A fenced-code delimiter line (``` or ~~~). Toggles "inside code" so `#` there isn't a heading. */
 const FENCE_RE = /^ {0,3}(```|~~~)/;
 
-/** Mutable builder node; collapsed to the immutable {@link ISection} once fully populated. */
 interface IBuildNode {
   id: string; // assigned in a second pass once the tree shape is known
   title: string;
@@ -26,12 +12,6 @@ interface IBuildNode {
   children: Array<IBuildNode>;
 }
 
-/**
- * Slugify a heading into an open `kind` label: lowercase, links unwrapped, emphasis
- * stripped, non-alphanumeric runs collapsed to single dashes. Falls back to `"section"`
- * so `kind` is never empty. This is the default labeller; an LLM kind-only pass could
- * refine it later, but it may never touch `title` or `content`.
- */
 export function slugify(title: string): string {
   const slug = title
     .toLowerCase()
@@ -43,7 +23,6 @@ export function slugify(title: string): string {
   return slug.length > 0 ? slug : "section";
 }
 
-/** Drop blank lines from the top and bottom of a block, keeping interior formatting intact. */
 function trimBlankEdges(lines: Array<string>): Array<string> {
   let start = 0;
   let end = lines.length;
@@ -52,7 +31,6 @@ function trimBlankEdges(lines: Array<string>): Array<string> {
   return lines.slice(start, end);
 }
 
-/** Assign deterministic dotted ids by sibling position: `1`, `1.1`, `1.2`, `2`, … */
 function assignIds(nodes: Array<IBuildNode>, prefix: string): void {
   nodes.forEach((node, index) => {
     const id = prefix ? `${prefix}.${index + 1}` : `${index + 1}`;
@@ -61,7 +39,6 @@ function assignIds(nodes: Array<IBuildNode>, prefix: string): void {
   });
 }
 
-/** Collapse a fully-built node into the public {@link ISection} shape (content computed here). */
 function finalize(node: IBuildNode): ISection {
   const content = trimBlankEdges(node.contentLines).join("\n");
   const section: ISection = {
@@ -76,15 +53,6 @@ function finalize(node: IBuildNode): ISection {
   return section;
 }
 
-/**
- * Parse faithful markdown into a generic section forest.
- *
- * Stack algorithm: at a heading of level L, pop open ancestors whose level ≥ L, attach the
- * new section under the new top (or as a root), then route following non-heading lines into
- * the deepest open section. A parent's `content` is therefore only its own intro text before
- * its first child heading — no duplication across levels. Content appearing before the first
- * heading (if any) becomes a leading `"preamble"` root so nothing is dropped.
- */
 export function parseSections(markdown: string): Array<ISection> {
   const lines = markdown.split("\n");
   const roots: Array<IBuildNode> = [];

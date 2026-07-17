@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { ISection } from "@/lib/extract/section";
 import type { IExtractedArchetype } from "@/lib/slides/types";
-import type { IArchetypeInput } from "@/lib/ai/pick-archetype";
+import type { IArchetypeInput } from "@/lib/generate/pick-archetype";
 import {
   analyzeContentShape,
   pickArchetype,
   planArchetypes,
   planExtractedArchetypes,
-} from "@/lib/ai/pick-archetype";
+} from "@/lib/generate/pick-archetype";
 
 function section(content: string): ISection {
   return { id: "s", title: "", kind: "body", content };

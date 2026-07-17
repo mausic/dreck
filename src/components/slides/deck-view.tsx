@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { IGroundingReport } from "@/lib/generate/schema";
 import type { IDeck, ISlide, ITokens } from "@/lib/slides";
 import { SlidePreview } from "@/components/slides/slide-preview";
 import { SlideEditor } from "@/components/slides/slide-editor";
@@ -7,49 +8,58 @@ import { cn } from "@/lib/utils";
 export interface IDeckViewProps {
   deck: IDeck;
   tokens: ITokens;
+  slideNumbers: Record<string, number>;
+  initialRevisions?: Record<string, number>;
+  onSlideChange: (
+    slide: ISlide,
+    grounding: IGroundingReport,
+    revision: number,
+  ) => void;
 }
 
-/**
- * Deck workspace: a thumbnail rail (static {@link SlidePreview}s) beside the
- * {@link SlideEditor} for the selected slide. The deck is held in state so region
- * edits persist per slide as the user navigates; edits are applied immutably at the
- * deck level (only the edited slide object is replaced).
- */
-export function DeckView({ deck: initialDeck, tokens }: IDeckViewProps) {
-  const [deck, setDeck] = useState(initialDeck);
-  const [selectedId, setSelectedId] = useState(initialDeck.slides[0]?.id ?? "");
+export function DeckView({
+  deck,
+  tokens,
+  slideNumbers,
+  initialRevisions = {},
+  onSlideChange,
+}: IDeckViewProps) {
+  const [selectedId, setSelectedId] = useState(deck.slides[0]?.id ?? "");
+  const [revisions, setRevisions] =
+    useState<Record<string, number>>(initialRevisions);
 
   if (deck.slides.length === 0) return null;
   const selected =
     deck.slides.find((slide) => slide.id === selectedId) ?? deck.slides[0];
 
-  /** Replace the edited slide in the working deck immutably; other slides keep identity. */
-  function handleSlideChange(next: ISlide) {
-    setDeck((current) => ({
-      ...current,
-      slides: current.slides.map((slide) =>
-        slide.id === next.id ? next : slide,
-      ),
-    }));
+  /** Advance the local revision and update the canonical deck through the parent reducer. */
+  function handleSlideChange(
+    next: ISlide,
+    revision: number,
+    grounding: IGroundingReport,
+  ) {
+    setRevisions((current) => ({ ...current, [next.id]: revision }));
+    onSlideChange(next, grounding, revision);
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-1 gap-6">
+    <div className="flex h-full min-h-0 flex-1 flex-col gap-4 xl:flex-row xl:gap-6">
       <nav
         aria-label="Slides"
-        className="flex w-52 shrink-0 flex-col gap-3 overflow-y-auto pr-1"
+        className="flex shrink-0 gap-3 overflow-x-auto pb-1 xl:w-52 xl:flex-col xl:overflow-y-auto xl:pr-1"
       >
         {deck.slides.map((slide, index) => {
           const isActive = slide.id === selected.id;
+          const slideNumber = slideNumbers[slide.id] ?? index + 1;
           return (
             <button
               key={slide.id}
               type="button"
               onClick={() => setSelectedId(slide.id)}
               aria-current={isActive}
-              aria-label={`Slide ${index + 1}`}
+              aria-label={`Slide ${slideNumber}`}
               className={cn(
-                "relative aspect-video w-full overflow-hidden rounded-md border-2 bg-card transition-colors",
+                "relative aspect-video w-40 shrink-0 overflow-hidden rounded-md border-2 bg-card transition-colors xl:w-full",
                 isActive
                   ? "border-primary"
                   : "border-transparent hover:border-border",
@@ -57,17 +67,18 @@ export function DeckView({ deck: initialDeck, tokens }: IDeckViewProps) {
             >
               <SlidePreview slide={slide} tokens={tokens} />
               <span className="absolute left-1.5 top-1.5 rounded bg-black/55 px-1.5 py-0.5 text-xs font-medium text-white">
-                {index + 1}
+                {slideNumber}
               </span>
             </button>
           );
         })}
       </nav>
 
-      {/* Keyed by slide id so switching slides resets the editor's selection. */}
       <SlideEditor
         key={selected.id}
+        deckId={deck.id}
         slide={selected}
+        revision={revisions[selected.id] ?? 0}
         tokens={tokens}
         onChange={handleSlideChange}
       />

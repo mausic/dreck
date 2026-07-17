@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { IExtractedArchetype } from "@/lib/slides/types";
 import type { IRawExtractedArchetype } from "@/lib/extract/enhance-archetypes";
 import { STYLE_REF } from "@/lib/slides/styles";
-import { textCapacity } from "@/lib/ai/fit";
+import { textCapacity, verifySlideFit } from "@/lib/ai/fit";
 import { enhanceExtractedArchetypes } from "@/lib/extract/enhance-archetypes";
+import { previewContentForRole } from "@/lib/slides/preview-content";
 
 function cover(): IExtractedArchetype {
   return {
@@ -362,9 +363,9 @@ describe("enhanceExtractedArchetypes", () => {
 
     const result = enhanceExtractedArchetypes(catalog(content));
     const panel = result.archetypes[1].slots[1];
-    expect(panel.x).toBe(1220);
+    expect(panel.x + panel.w).toBe(1440);
     expect(panel.y).toBe(592);
-    expect(panel.w).toBe(220);
+    expect(panel.w).toBeGreaterThanOrEqual(220);
     expect(panel.h).toBe(218);
   });
 
@@ -400,5 +401,141 @@ describe("enhanceExtractedArchetypes", () => {
     const [third, fourth] = result.archetypes[1].slots;
     expect(fourth.y).toBeGreaterThanOrEqual(third.y + third.h + 8);
     expect(fourth.y + fourth.h).toBeLessThanOrEqual(810);
+  });
+
+  it("merges split label and value slots into aligned table rows", () => {
+    const content: IExtractedArchetype = {
+      id: "split-rows",
+      name: "Split rows",
+      category: "table",
+      description: "Label and value columns emitted as separate slots",
+      slots: [
+        {
+          id: "row-1-label",
+          role: "heading",
+          x: 78,
+          y: 338,
+          w: 250,
+          h: 24,
+          styleRef: STYLE_REF.twoColRightLabel,
+        },
+        {
+          id: "row-1-val",
+          role: "body",
+          x: 508,
+          y: 338,
+          w: 203,
+          h: 44,
+          styleRef: STYLE_REF.contentFooter,
+        },
+        {
+          id: "row-2-label",
+          role: "heading",
+          x: 78,
+          y: 402,
+          w: 250,
+          h: 24,
+          styleRef: STYLE_REF.twoColRightLabel,
+        },
+        {
+          id: "row-2-value",
+          role: "body",
+          x: 531,
+          y: 402,
+          w: 212,
+          h: 44,
+          styleRef: STYLE_REF.contentFooter,
+        },
+      ],
+    };
+
+    const result = enhanceExtractedArchetypes([content], {
+      validateCatalog: false,
+    });
+    expect(result.archetypes[0].slots).toMatchObject([
+      { id: "row-1", role: "tableRow", x: 78, w: 633 },
+      { id: "row-2", role: "tableRow", x: 78, w: 665 },
+    ]);
+  });
+
+  it("expands slots until the exact preview copy fits", () => {
+    const content: IExtractedArchetype = {
+      id: "narrow-panel-heading",
+      name: "Narrow panel heading",
+      category: "mixed",
+      description: "A tracked uppercase heading that initially wraps",
+      slots: [
+        {
+          id: "panel-bg",
+          role: "block",
+          x: 739,
+          y: 263,
+          w: 623,
+          h: 501,
+          styleRef: STYLE_REF.sidebarPanelBg,
+        },
+        {
+          id: "panel-heading",
+          role: "heading",
+          x: 765,
+          y: 299,
+          w: 206,
+          h: 25,
+          styleRef: STYLE_REF.sidebarPanelLabel,
+        },
+      ],
+    };
+
+    const result = enhanceExtractedArchetypes([content], {
+      validateCatalog: false,
+    });
+    const heading = result.archetypes[0].slots[1];
+    expect(heading.w).toBeGreaterThan(206);
+    expect(
+      verifySlideFit({
+        id: "preview",
+        archetypeId: content.id,
+        elements: [
+          {
+            ...heading,
+            slotId: heading.id,
+            content: previewContentForRole(heading.role),
+          },
+        ],
+      }).ok,
+    ).toBe(true);
+  });
+
+  it("rejects a composite panel duplicated by adjacent text slots", () => {
+    const content: IExtractedArchetype = {
+      id: "decomposed-panel",
+      name: "Decomposed panel",
+      category: "mixed",
+      description: "A composite panel plus separate neighboring copy",
+      slots: [
+        {
+          id: "panel",
+          role: "panel",
+          x: 786,
+          y: 414,
+          w: 574,
+          h: 218,
+          styleRef: STYLE_REF.sidebarPanel,
+        },
+        {
+          id: "panel-intro",
+          role: "body",
+          x: 812,
+          y: 354,
+          w: 522,
+          h: 52,
+          styleRef: STYLE_REF.contentFooter,
+        },
+      ],
+    };
+
+    expect(() =>
+      enhanceExtractedArchetypes([content], { validateCatalog: false }),
+    ).toThrow("decomposes panel");
   });
 });

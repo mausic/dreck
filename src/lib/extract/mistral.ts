@@ -1,33 +1,9 @@
-/**
- * Stage 1 of extraction: PDF → faithful, table-aware markdown via the Mistral Document
- * (OCR) API. Server-only — the key is read from env here and never reaches the client.
- *
- * Why the dedicated OCR endpoint (`mistral-ocr-latest`) and not the AI SDK: the SDK only
- * exposes Mistral OCR as a chat model reading a PDF, which can paraphrase; the `/v1/ocr`
- * endpoint is purpose-built and returns verbatim per-page markdown — critical because this
- * markdown is the durable source of truth a later grounding step checks slides against.
- * Naive `pdftotext`/`unpdf` is out too: it scrambles tables (weight bands drift from doses);
- * the doc model keeps tables as GitHub-flavoured markdown so row↔value links survive.
- *
- * Transport is a plain `fetch` (no SDK): fewer deps and it runs natively on Workers. The
- * PDF is sent inline as a base64 `data:` URL — for a single-user prototype this skips the
- * Files-upload + signed-URL round-trip. The response is parsed defensively so a shape
- * change surfaces as a clear error instead of a silent `undefined`.
- */
 import { z } from "zod";
+import { getConfig } from "@/lib/config";
 
 const OCR_ENDPOINT = "https://api.mistral.ai/v1/ocr";
-const DEFAULT_OCR_MODEL = "mistral-ocr-latest";
+const OCR_TIMEOUT_MS = 60_000;
 
-/** Thrown when the Mistral key is absent; the server function turns it into a soft error. */
-export class MissingMistralKeyError extends Error {
-  constructor() {
-    super("MISTRAL_API_KEY is not set");
-    this.name = "MissingMistralKeyError";
-  }
-}
-
-/** Thrown when the OCR call fails (non-2xx) or returns an unexpected shape. */
 export class MistralOcrError extends Error {
   constructor(message: string) {
     super(message);
@@ -50,15 +26,14 @@ const OcrResponseSchema = z.object({
  * @param pdfBase64 the PDF bytes, base64-encoded WITHOUT a `data:` prefix.
  */
 export async function pdfToMarkdown(pdfBase64: string): Promise<string> {
-  const apiKey = process.env.MISTRAL_API_KEY;
-  if (!apiKey) throw new MissingMistralKeyError();
+  const config = getConfig();
 
-  const model = process.env.MISTRAL_OCR_MODEL ?? DEFAULT_OCR_MODEL;
+  const model = config.MISTRAL_OCR_MODEL;
 
   const response = await fetch(OCR_ENDPOINT, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${config.MISTRAL_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -69,6 +44,7 @@ export async function pdfToMarkdown(pdfBase64: string): Promise<string> {
       },
       include_image_base64: false,
     }),
+    signal: AbortSignal.timeout(OCR_TIMEOUT_MS),
   });
 
   if (!response.ok) {

@@ -5,27 +5,9 @@ import type {
 } from "@/lib/slides/types";
 import { STYLE_REF } from "@/lib/slides/styles";
 
-/**
- * Reusable layout skeletons, hand-authored as data (slots + canonical geometry) and styled
- * entirely by the extracted design tokens via `styleRef` → CSS presets. The set is deliberately
- * varied in COMPOSITION — some full-width, some with a structured panel, some metric-led — so a
- * generated deck can pick a layout that fits each slide's content shape instead of collapsing
- * into one archetype (see `pick-archetype.ts`).
- *
- * All geometry below is CANONICAL (1440×810 units). Nothing here knows about rendered pixels,
- * and every archetype is just more slots feeding the same flat slide model — so new archetypes
- * render and are region-editable through the existing renderer/editor with no downstream change.
- *
- * `card-grid` and `stat` come in count variants (2–4 cards, 1–3 figures): the selector resolves
- * the concrete variant from how many parallel items / metrics the content actually has, so a card
- * or figure is never left empty.
- */
-
-/** Canonical content margins shared by the white-stage archetypes. */
 const MARGIN = 96;
 const CONTENT_W = 1440 - MARGIN * 2; // 1248
 
-/** Title slide: full-bleed navy, eyebrow + big title + short rule + subtitle + footer. */
 const titleArchetype: IArchetype = {
   id: "title",
   name: "Title",
@@ -96,11 +78,6 @@ const titleArchetype: IArchetype = {
   ],
 };
 
-/**
- * Shared white-stage header (eyebrow + heading, optional intro, footer) reused by the content
- * archetypes so their headers line up. Slots come first in the archetype so later body slots
- * paint above them (though they never overlap).
- */
 function whiteHeader(opts: { intro: boolean }): Array<ISlot> {
   const slots: Array<ISlot> = [
     {
@@ -145,13 +122,11 @@ function whiteHeader(opts: { intro: boolean }): Array<ISlot> {
   return slots;
 }
 
-// — Card grid: a row of N cards, each a surface panel with title / figure / description. —
 const CARD_TOP = 336;
 const CARD_H = 352;
 const CARD_GAP = 28;
 const CARD_PAD = 32;
 
-/** N evenly-spaced cards across the content width; the bg block precedes each card's text. */
 function cardSlots(count: number): Array<ISlot> {
   const cardW = Math.floor((CONTENT_W - (count - 1) * CARD_GAP) / count);
   const innerW = cardW - CARD_PAD * 2;
@@ -202,7 +177,6 @@ function cardSlots(count: number): Array<ISlot> {
   return slots;
 }
 
-/** Card grid variant with `count` cards (2–4). Full width, no side panel. */
 function makeCardGrid(count: number): IArchetype {
   return {
     id: `card-grid-${count}`,
@@ -211,7 +185,6 @@ function makeCardGrid(count: number): IArchetype {
   };
 }
 
-/** Two column: an accent-border list (left) + a prose/secondary-list explainer (right). */
 const twoColumnArchetype: IArchetype = {
   id: "two-column",
   name: "Two column",
@@ -273,11 +246,9 @@ const twoColumnArchetype: IArchetype = {
   ],
 };
 
-// — Stat: one to three large metric figures with labels. Full width, no side panel. —
 const STAT_TOP = 360;
 const STAT_GAP = 48;
 
-/** N evenly-spaced metric blocks (figure + label + caption) across the content width. */
 function statSlots(count: number): Array<ISlot> {
   const blockW = Math.floor((CONTENT_W - (count - 1) * STAT_GAP) / count);
   const slots: Array<ISlot> = [];
@@ -317,7 +288,6 @@ function statSlots(count: number): Array<ISlot> {
   return slots;
 }
 
-/** Stat variant with `count` figures (1–3). */
 function makeStat(count: number): IArchetype {
   return {
     id: `stat-${count}`,
@@ -326,7 +296,6 @@ function makeStat(count: number): IArchetype {
   };
 }
 
-/** Section divider: minimal, light surface stage with one big navy title + a kicker. */
 const sectionDividerArchetype: IArchetype = {
   id: "section-divider",
   name: "Section divider",
@@ -370,7 +339,6 @@ const sectionDividerArchetype: IArchetype = {
   ],
 };
 
-/** Callout: a prominent statement/quote block + attribution. Generous margins for emphasis. */
 const calloutArchetype: IArchetype = {
   id: "callout",
   name: "Callout",
@@ -414,7 +382,6 @@ const calloutArchetype: IArchetype = {
   ],
 };
 
-// Left column of label/value rows — geometry kept regular so rows stack cleanly.
 const ROW_COUNT = 5;
 const ROW_TOP = 316;
 const ROW_STEP = 74;
@@ -433,13 +400,6 @@ const sidebarRowSlots: Array<ISlot> = Array.from(
   }),
 );
 
-/**
- * Table + sidebar: eyebrow + heading + a left column of label/value rows + a navy panel.
- *
- * The panel is a STRUCTURED stat callout (bg block + label + big figure + caption), not the
- * lone-paragraph holder it used to be — the strongest visual element carries one headline metric.
- * The panel bg precedes its text slots so the text paints on top.
- */
 const tableSidebarArchetype: IArchetype = {
   id: "table-sidebar",
   name: "Table + sidebar",
@@ -511,10 +471,6 @@ const tableSidebarArchetype: IArchetype = {
   ],
 };
 
-/**
- * Every registered archetype, including the count variants. Keyed by id for lookup during
- * generation/rendering. Ids are free-form strings, so the count variants slot in cleanly.
- */
 const ALL_ARCHETYPES: Array<IArchetype> = [
   titleArchetype,
   sectionDividerArchetype,
@@ -525,15 +481,10 @@ const ALL_ARCHETYPES: Array<IArchetype> = [
   ...[1, 2, 3].map(makeStat),
 ];
 
-/** All defined archetypes, keyed by id for lookup during generation/rendering. */
 export const ARCHETYPES: Record<string, IArchetype> = Object.fromEntries(
   ALL_ARCHETYPES.map((archetype) => [archetype.id, archetype]),
 );
 
-/**
- * The archetype FAMILIES the planner chooses between (count variants collapse to one name).
- * The selector maps a family + the content's shape to a concrete registered id.
- */
 export const ARCHETYPE_FAMILIES = [
   "title",
   "section-divider",
@@ -545,7 +496,6 @@ export const ARCHETYPE_FAMILIES = [
 ] as const;
 export type TArchetypeFamily = (typeof ARCHETYPE_FAMILIES)[number];
 
-/** Planner-facing descriptions for the built-in families. */
 export const ARCHETYPE_FAMILY_DESCRIPTORS: Array<IArchetypeDescriptor> = [
   {
     id: "title",
@@ -594,7 +544,6 @@ export const ARCHETYPE_FAMILY_DESCRIPTORS: Array<IArchetypeDescriptor> = [
   },
 ];
 
-/** Look up an archetype by id. */
 export function getArchetype(id: string): IArchetype | undefined {
   return ARCHETYPES[id];
 }

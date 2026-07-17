@@ -37,6 +37,8 @@ type FileDropzoneProps = {
   disabled?: boolean;
   /** Id of the underlying input, so an external `<Label htmlFor>` can target it. */
   id?: string;
+  ariaDescribedBy?: string;
+  ariaInvalid?: boolean;
   className?: string;
 };
 
@@ -74,6 +76,8 @@ export function FileDropzone({
   pending = false,
   disabled = false,
   id,
+  ariaDescribedBy,
+  ariaInvalid,
   className,
 }: FileDropzoneProps) {
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -144,6 +148,9 @@ export function FileDropzone({
       role="button"
       tabIndex={interactive ? 0 : -1}
       aria-disabled={interactive ? undefined : true}
+      aria-busy={pending}
+      aria-describedby={ariaDescribedBy}
+      aria-invalid={ariaInvalid}
       aria-label={file ? `Replace ${fileKind}` : `Upload ${fileKind}`}
       onClick={openPicker}
       onKeyDown={handleKeyDown}
@@ -198,7 +205,10 @@ export function FileDropzone({
             )}
           </div>
           {status ? (
-            <p className="text-muted-foreground w-full text-left text-xs">
+            <p
+              role="status"
+              className="text-muted-foreground w-full text-left text-xs"
+            >
               {status}
             </p>
           ) : null}

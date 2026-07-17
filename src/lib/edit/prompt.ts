@@ -1,20 +1,9 @@
-/**
- * The edit prompt — a versioned constant in code (NOT the DB; the two DB-backed prompts
- * are the extraction prompts, a later task). `EDIT_SYSTEM_PROMPT` is the fixed policy;
- * `buildEditPrompt` assembles the per-request task from the validated input.
- */
-import type { TEditRegionData } from "@/lib/ai/edit-schema";
+import type { TEditModelData } from "@/lib/edit/schema";
 import type { TSlotContent } from "@/lib/slides/types";
 import { isLabelValue, isPanelContent } from "@/lib/slides/content";
 
-/** Bump when the wording below changes materially, so runs stay attributable. */
 export const EDIT_PROMPT_VERSION = "edit/v1";
 
-/**
- * System policy for the region edit. It fixes the contract (edit only the given ids,
- * preserve shape, invent nothing) and the output vocabulary (the `kind`-tagged content
- * the {@link EditPatchSchema} expects).
- */
 export const EDIT_SYSTEM_PROMPT = `You are a precise copy editor for a corporate slide deck.
 
 You are given one or more selected slide elements (each with an id, a role, its content shape, and its current content), the user's edit instruction, read-only text from the rest of the slide for context, and the deck's design tokens.
@@ -33,7 +22,6 @@ Rules:
 
 Respond with { "updates": [{ "elementId", "content" }, ...] } covering exactly the given element ids.`;
 
-/** The kind label shown to the model for a target's current content. */
 function contentKind(content: TSlotContent): string {
   if (typeof content === "string") return "text";
   if (Array.isArray(content)) return "lines";
@@ -42,8 +30,7 @@ function contentKind(content: TSlotContent): string {
   return "text";
 }
 
-/** Assemble the per-request task message from the validated edit input. */
-export function buildEditPrompt(data: TEditRegionData): string {
+export function buildEditPrompt(data: TEditModelData): string {
   const targets = data.targets
     .map(
       (t) =>

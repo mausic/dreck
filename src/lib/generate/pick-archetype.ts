@@ -1,22 +1,5 @@
-/**
- * Content-shape-driven archetype selection — the first step of the per-slide code loop.
- *
- * Instead of always picking the same archetype, this derives a few simple SHAPE features from a
- * slide's selected content (how many parallel items, whether they're label→value, whether a
- * headline metric dominates, how much prose, is-opening/is-transition) and maps them to the
- * best-fit archetype FAMILY. Count families (card-grid, stat) then resolve to a concrete variant
- * from the item/metric count, so a card or figure is never left empty.
- *
- * Control sits with the PLANNER: its per-slide archetype choice is honored whenever the layout is
- * structurally feasible for the content ({@link feasibleFamilies}), and the shape scorer only
- * decides when the planner gives no choice or an impossible one (`stat` with no numbers, etc.).
- * That's deliberate — the planner sees the whole deck and can vary layouts far better than a
- * per-slide shape heuristic, which for uniform content (all prose + tables) collapses to two or
- * three archetypes. A deck-level diversity fade in {@link planArchetypes} is the backstop that
- * keeps the mix varied even when the planner under-varies.
- */
 import type { ISection } from "@/lib/extract/section";
-import type { TSlidePlanItem } from "@/lib/ai/generate-schema";
+import type { TSlidePlanItem } from "@/lib/generate/schema";
 import type {
   IExtractedArchetype,
   TArchetypeCategory,
@@ -24,14 +7,12 @@ import type {
 import type { TArchetypeFamily } from "@/lib/slides/archetypes";
 import { ARCHETYPE_FAMILIES } from "@/lib/slides/archetypes";
 
-/** One slide's inputs to selection: its plan item, its resolved sections, its deck position. */
 export interface IArchetypeInput {
   item: TSlidePlanItem;
   sections: Array<ISection>;
   index: number;
 }
 
-/** Simple, deterministic features describing the shape of a slide's content. */
 export interface IContentShape {
   /** Parallel items — bullet lines + table data rows. */
   itemCount: number;
@@ -72,7 +53,6 @@ function countMatches(re: RegExp, text: string): number {
   return text.match(re)?.length ?? 0;
 }
 
-/** Whether a single item line reads as a label→value pair. */
 function isLabelValueLine(line: string): boolean {
   if (TABLE_ROW_RE.test(line)) {
     const cells = line
@@ -85,7 +65,6 @@ function isLabelValueLine(line: string): boolean {
   return /^[^:]{1,40}:\s+\S/.test(cleaned);
 }
 
-/** Items are homogeneous when none is wildly longer/shorter than the average — a "parallel" set. */
 function isHomogeneous(items: Array<string>): boolean {
   if (items.length < 2) return false;
   const lengths = items.map((item) => item.trim().length);
@@ -95,7 +74,6 @@ function isHomogeneous(items: Array<string>): boolean {
   return maxDeviation <= avg * 0.9;
 }
 
-/** Derive {@link IContentShape} from a slide's plan item + selected sections. Pure and cheap. */
 export function analyzeContentShape(input: IArchetypeInput): IContentShape {
   const { item, sections, index } = input;
   const body = sections.map((section) => section.content).join("\n");
@@ -184,7 +162,6 @@ export function analyzeContentShape(input: IArchetypeInput): IContentShape {
   };
 }
 
-/** Score each family 0–1 for how well it fits the shape. `two-column` is the always-present floor. */
 function scoreFamilies(shape: IContentShape): Record<TArchetypeFamily, number> {
   const scores: Record<TArchetypeFamily, number> = {
     title: 0,
@@ -223,7 +200,6 @@ function scoreFamilies(shape: IContentShape): Record<TArchetypeFamily, number> {
   return scores;
 }
 
-/** The registered family a suggested id belongs to (count variants collapse to their family). */
 function familyOf(id: string): TArchetypeFamily | undefined {
   if (id.startsWith("card-grid")) return "card-grid";
   if (id.startsWith("stat")) return "stat";
@@ -244,13 +220,6 @@ const DIVERSITY_EXEMPT = new Set<TArchetypeFamily>([
   "section-divider",
 ]);
 
-/**
- * Families whose layout is structurally VIABLE for this content — the set the planner is allowed
- * to pick from. This is the validation boundary: the planner's own choice is honored whenever it
- * lands in here and rejected only when it's impossible (`stat` with no numbers, `card-grid` with
- * <2 items, anything but `title` on the cover). `two-column` is always viable for a content slide,
- * so a fallback always exists.
- */
 function feasibleFamilies(shape: IContentShape): Set<TArchetypeFamily> {
   if (shape.isOpening) return new Set<TArchetypeFamily>(["title"]);
   const set = new Set<TArchetypeFamily>(["two-column"]);
@@ -263,12 +232,6 @@ function feasibleFamilies(shape: IContentShape): Set<TArchetypeFamily> {
   return set;
 }
 
-/**
- * Score every family for one slide: base shape-fit, restricted to the feasible set, with a feasible
- * planner suggestion HONORED (given the top score so it leads) and a diversity fade for families
- * already used. This is what shifts control to the planner — its per-slide layout choice wins
- * whenever it is viable, so the planner's instructions actually drive the mix of layouts.
- */
 function scoreSlide(
   shape: IContentShape,
   suggestedId: string | undefined,
@@ -296,7 +259,6 @@ function scoreSlide(
   return scores;
 }
 
-/** Argmax over families; ties resolve to the earlier-listed family. Defaults to the floor. */
 function argmaxFamily(
   scores: Record<TArchetypeFamily, number>,
 ): TArchetypeFamily {
@@ -311,7 +273,6 @@ function clamp(n: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, n));
 }
 
-/** Resolve a family to a concrete registered archetype id, picking the count variant from shape. */
 function resolveVariant(
   family: TArchetypeFamily,
   shape: IContentShape,
@@ -329,12 +290,6 @@ export function pickArchetype(input: IArchetypeInput): string {
   return resolveVariant(argmaxFamily(scores), shape);
 }
 
-/**
- * Pick archetype ids for a whole deck. Each slide honors the planner's feasible archetype choice,
- * with a diversity fade ({@link DIVERSITY_PENALTY} per prior use) that only overtakes a repeated
- * layout after several uses — so the planner drives the mix and the deck still can't collapse into
- * one archetype if the planner under-varies.
- */
 export function planArchetypes(inputs: Array<IArchetypeInput>): Array<string> {
   const used: Partial<Record<TArchetypeFamily, number>> = {};
 
@@ -346,11 +301,6 @@ export function planArchetypes(inputs: Array<IArchetypeInput>): Array<string> {
     return resolveVariant(family, shape);
   });
 }
-
-/**
- * Resolve exact ids from an extracted catalog. The planner chooses the layout; code enforces a
- * cover first and falls back across content layouts when an id is absent or invalid.
- */
 export function planExtractedArchetypes(
   inputs: Array<IArchetypeInput>,
   archetypes: Array<IExtractedArchetype>,
