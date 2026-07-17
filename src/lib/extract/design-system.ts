@@ -74,7 +74,7 @@ Return the actual six-digit hex colors for these roles: primary, surface, accent
 and textMuted. Also return one or two sentences describing spacing rhythm and rule/eyebrow treatment.
 Do not return fonts, page metadata, content, or layouts.`;
 
-const PAGE_ARCHETYPE_SYSTEM_PROMPT = `Extract a reusable layout skeleton from one specified PDF page.
+const PAGE_ARCHETYPE_SYSTEM_PROMPT = `Extract a reusable layout skeleton from the attached one-page PDF.
 
 Recreate composition, not content: every source text region becomes an empty semantic slot and no
 source-deck wording may appear. Use integer coordinates in a fixed 1440×810 canvas.
@@ -84,7 +84,11 @@ Rules:
 - Categories are cover, section, statement, parallel-items, metrics, table, or mixed.
 - Slot ids must be descriptive kebab-case and unique.
 - Roles are logo, eyebrow, title, subtitle, heading, body, block, tableRow, panel, footer, or custom.
-- Use block for backgrounds, cards, panels, and rules; blocks receive no generated copy.
+- Use block for visual backgrounds, cards, panels, and rules; blocks receive no generated copy.
+- Use panel only for one indivisible heading-and-body copy region. If a panel contains separate text
+  regions, return its surface as block and return each text region separately.
+- Represent every label-to-value row as one tableRow spanning the full row. Never split a row into
+  separate label and value slots.
 - Preserve paint order: large backgrounds first, then smaller blocks, then text.
 - Keep every slot within the canvas.
 - Use the closest style from the supplied list; never invent a style reference.`;
@@ -187,8 +191,9 @@ async function extractPalette(pdfBytes: Uint8Array): Promise<{
   });
 }
 
-function buildPagePrompt(page: number): string {
-  return `Extract the layout from PDF page ${page}. Process that page only.
+export function buildIsolatedPagePrompt(sourcePage: number): string {
+  return `The attachment contains exactly one PDF page, copied from source page ${sourcePage}.
+Extract the attachment's only page (PDF page 1). The source page number is metadata only.
 
 Allowed style references:
 ${STYLE_REFS.join(", ")}
@@ -211,7 +216,7 @@ async function extractPageArchetype(
         {
           role: "user",
           content: [
-            { type: "text", text: buildPagePrompt(page) },
+            { type: "text", text: buildIsolatedPagePrompt(page) },
             { type: "file", data: pdfBytes, mediaType: "application/pdf" },
           ],
         },

@@ -3,6 +3,7 @@ import { PDFDocument } from "pdf-lib";
 
 import {
   MAX_DESIGN_PAGES,
+  buildIsolatedPagePrompt,
   countPdfPages,
   prepareDesignPages,
 } from "@/lib/extract/design-system";
@@ -33,5 +34,15 @@ describe("countPdfPages", () => {
     await expect(
       prepareDesignPages(await pdfBytes(MAX_DESIGN_PAGES + 1)),
     ).rejects.toThrow(`limited to ${MAX_DESIGN_PAGES} pages`);
+  });
+});
+
+describe("buildIsolatedPagePrompt", () => {
+  it("addresses the isolated attachment as page one", () => {
+    const prompt = buildIsolatedPagePrompt(4);
+
+    expect(prompt).toContain("copied from source page 4");
+    expect(prompt).toContain("PDF page 1");
+    expect(prompt).not.toContain("PDF page 4");
   });
 });

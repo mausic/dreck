@@ -3,19 +3,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
 import type { AnyFieldApi } from "@tanstack/react-form";
-import type {
-  IExtractedArchetype,
-  ISlide,
-  ITokens,
-  TSlotContent,
-  TSlotRole,
-} from "@/lib/slides";
+import type { IExtractedArchetype, ISlide, ITokens } from "@/lib/slides";
 import type { TGenerationSlot } from "@/hooks/use-deck-generation";
 import { useDeckGeneration } from "@/hooks/use-deck-generation";
 import {
   contentDocsQueryOptions,
   designDocsQueryOptions,
 } from "@/lib/documents/queries";
+import { previewContentForRole } from "@/lib/slides/preview-content";
 import { DeckView } from "@/components/slides/deck-view";
 import { SlidePreview } from "@/components/slides/slide-preview";
 import { DocumentPicker } from "@/components/documents/document-select";
@@ -106,31 +101,6 @@ function DesignSystemView({
   );
 }
 
-function previewContent(role: TSlotRole): TSlotContent {
-  switch (role) {
-    case "block":
-      return "";
-    case "tableRow":
-      return { label: "Label", value: "Value" };
-    case "panel":
-      return { heading: "Key message", body: "Supporting detail" };
-    case "body":
-      return ["Key point", "Supporting point"];
-    case "title":
-      return "Presentation title";
-    case "heading":
-      return "Slide heading";
-    case "eyebrow":
-      return "Section label";
-    case "footer":
-      return "Footer";
-    case "logo":
-      return "Brand";
-    default:
-      return "Content";
-  }
-}
-
 function ArchetypePreview({
   archetype,
   tokens,
@@ -149,7 +119,7 @@ function ArchetypePreview({
       y: slot.y,
       w: slot.w,
       h: slot.h,
-      content: previewContent(slot.role),
+      content: previewContentForRole(slot.role),
       styleRef: slot.styleRef,
     })),
   };

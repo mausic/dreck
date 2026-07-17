@@ -15,13 +15,21 @@ import {
   STYLE_REF,
   STYLE_REFS,
   SURFACE_BLOCK_STYLE_REFS,
+  isLabelValue,
+  isPanelContent,
   resolveStyle,
 } from "@/lib/slides";
 import {
   ExtractedArchetypeSchema,
   ExtractedArchetypesSchema,
 } from "@/lib/slides/archetype-schema";
-import { MIN_PANEL_HEIGHT, MIN_PANEL_WIDTH, textCapacity } from "@/lib/ai/fit";
+import {
+  MIN_PANEL_HEIGHT,
+  MIN_PANEL_WIDTH,
+  textCapacity,
+  verifySlideFit,
+} from "@/lib/ai/fit";
+import { previewContentForRole } from "@/lib/slides/preview-content";
 
 type TSurfaceTone = "dark" | "light";
 type TEnhancementKind = "geometry" | "style";
@@ -312,22 +320,67 @@ function normalizeRawArchetypes(
   return normalized;
 }
 
-function requiredChars(role: TSlotRole): number {
-  switch (role) {
-    case "title":
-    case "heading":
-      return 12;
-    case "body":
-      return 20;
-    case "subtitle":
-      return 16;
-    case "tableRow":
-      return 14;
-    case "block":
-      return 0;
-    default:
-      return 8;
+function mergeSplitTableRows(
+  archetype: IExtractedArchetype,
+  issues: Array<IArchetypeEnhancementIssue>,
+): void {
+  const byId = new Map(archetype.slots.map((slot) => [slot.id, slot]));
+  const consumed = new Set<string>();
+  const merged: Array<ISlot> = [];
+
+  for (const label of archetype.slots) {
+    if (label.role === "block" || consumed.has(label.id)) continue;
+    const match = label.id.match(/^(.*)-label$/);
+    if (!match) continue;
+    const stem = match[1];
+    const value = byId.get(`${stem}-val`) ?? byId.get(`${stem}-value`);
+    if (!value || value.role === "block" || consumed.has(value.id)) continue;
+    const tolerance = Math.max(label.h, value.h) / 2;
+    if (Math.abs(label.y - value.y) > tolerance) continue;
+
+    const x = Math.min(label.x, value.x);
+    const y = Math.min(label.y, value.y);
+    const right = Math.max(label.x + label.w, value.x + value.w);
+    const bottom = Math.max(label.y + label.h, value.y + value.h);
+    consumed.add(label.id);
+    consumed.add(value.id);
+    merged.push({
+      id: stem,
+      role: "tableRow",
+      x,
+      y,
+      w: right - x,
+      h: bottom - y,
+      styleRef: STYLE_REF.sidebarRow,
+    });
+    issues.push({
+      archetypeId: archetype.id,
+      slotId: stem,
+      kind: "geometry",
+      message: `Merged split label/value slots '${label.id}' and '${value.id}'.`,
+    });
   }
+
+  if (merged.length > 0) {
+    archetype.slots = orderSlots([
+      ...archetype.slots.filter((slot) => !consumed.has(slot.id)),
+      ...merged,
+    ]);
+  }
+}
+
+function requiredChars(role: TSlotRole): number {
+  const content = previewContentForRole(role);
+  if (typeof content === "string") return content.length;
+  if (Array.isArray(content)) {
+    return Math.max(0, ...content.map((line) => line.length));
+  }
+  if (isLabelValue(content))
+    return content.label.length + content.value.length + 3;
+  if (isPanelContent(content)) {
+    return Math.max(content.heading.length, content.body.length);
+  }
+  return 0;
 }
 
 function styleFontSize(styleRef: TStyleRef): number {
@@ -486,13 +539,19 @@ function styleMatchesSurface(
 }
 
 function slotFits(slot: ISlot, styleRef: TStyleRef): boolean {
-  if (slot.role === "panel")
-    return slot.w >= MIN_PANEL_WIDTH && slot.h >= MIN_PANEL_HEIGHT;
-  const capacity = textCapacity(slot.role, styleRef, slot.w, slot.h);
-  return (
-    capacity.maxLines >= requiredLines(slot.role) &&
-    capacity.charsPerLine >= requiredChars(slot.role)
-  );
+  if (slot.role === "block") return true;
+  return verifySlideFit({
+    id: "archetype-preview",
+    archetypeId: "archetype-preview",
+    elements: [
+      {
+        ...slot,
+        slotId: slot.id,
+        styleRef,
+        content: previewContentForRole(slot.role),
+      },
+    ],
+  }).ok;
 }
 
 function uniqueStyles(styles: Array<TStyleRef>): Array<TStyleRef> {
@@ -528,11 +587,11 @@ function smallestCandidate(slot: ISlot, surface: TSurfaceTone): TStyleRef {
 function expandToFit(slot: ISlot, slots: Array<ISlot>): void {
   const bounds = boundsFor(slot, slots);
   if (slot.role === "panel") {
-    const width = Math.min(
+    let width = Math.min(
       Math.max(slot.w, MIN_PANEL_WIDTH),
       bounds.right - bounds.left,
     );
-    const height = Math.min(
+    let height = Math.min(
       Math.max(slot.h, MIN_PANEL_HEIGHT),
       bounds.bottom - bounds.top,
     );
@@ -540,6 +599,21 @@ function expandToFit(slot: ISlot, slots: Array<ISlot>): void {
     slot.y = Math.min(Math.max(slot.y, bounds.top), bounds.bottom - height);
     slot.w = width;
     slot.h = height;
+    while (!slotFits(slot, slot.styleRef)) {
+      if (width < bounds.right - bounds.left) {
+        width = Math.min(width + 40, bounds.right - bounds.left);
+        slot.x = Math.min(Math.max(slot.x, bounds.left), bounds.right - width);
+        slot.w = width;
+        continue;
+      }
+      if (height < bounds.bottom - bounds.top) {
+        height = Math.min(height + 36, bounds.bottom - bounds.top);
+        slot.y = Math.min(Math.max(slot.y, bounds.top), bounds.bottom - height);
+        slot.h = height;
+        continue;
+      }
+      break;
+    }
     return;
   }
   const minHeight = minimumHeight(slot.styleRef, requiredLines(slot.role));
@@ -617,6 +691,29 @@ function horizontalOverlapRatio(left: ISlot, right: ISlot): number {
     Math.min(left.x + left.w, right.x + right.w) - Math.max(left.x, right.x),
   );
   return width / Math.max(1, Math.min(left.w, right.w));
+}
+
+function verticalGap(left: ISlot, right: ISlot): number {
+  if (left.y > right.y + right.h) return left.y - (right.y + right.h);
+  if (right.y > left.y + left.h) return right.y - (left.y + left.h);
+  return 0;
+}
+
+function rejectDecomposedCompositePanels(archetype: IExtractedArchetype): void {
+  for (const panel of archetype.slots.filter((slot) => slot.role === "panel")) {
+    const adjacentText = archetype.slots.find(
+      (slot) =>
+        slot.role !== "block" &&
+        slot.role !== "panel" &&
+        horizontalOverlapRatio(panel, slot) >= 0.35 &&
+        verticalGap(panel, slot) <= 2 * TEXT_GAP,
+    );
+    if (adjacentText) {
+      throw new Error(
+        `Extracted archetype '${archetype.id}' decomposes panel '${panel.id}' into adjacent text slot '${adjacentText.id}'.`,
+      );
+    }
+  }
 }
 
 function textSlotsConflict(upper: ISlot, lower: ISlot): boolean {
@@ -765,6 +862,8 @@ export function enhanceExtractedArchetypes(
   const enhanced = normalizeRawArchetypes(archetypes, issues, validateCatalog);
 
   for (const archetype of enhanced) {
+    mergeSplitTableRows(archetype, issues);
+    rejectDecomposedCompositePanels(archetype);
     for (const slot of archetype.slots) {
       normalizeSlot(archetype.id, slot, archetype.slots, issues);
       centerInCompactBlock(archetype.id, slot, archetype.slots, issues);
