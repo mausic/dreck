@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { TWireContent } from "@/lib/ai/content-patch";
-import type { IWireSlide } from "#/lib/generate/schema";
+import type { IWireSlide } from "@/lib/generate/schema";
 import { toSlotContent, zContentPatch } from "@/lib/ai/content-patch";
 import { SlotContentSchema } from "@/lib/slides/slide-schema";
 import { TokensSchema } from "@/lib/slides/tokens";

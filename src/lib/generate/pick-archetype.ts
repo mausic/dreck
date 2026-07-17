@@ -1,5 +1,5 @@
 import type { ISection } from "@/lib/extract/section";
-import type { TSlidePlanItem } from "#/lib/generate/schema";
+import type { TSlidePlanItem } from "@/lib/generate/schema";
 import type {
   IExtractedArchetype,
   TArchetypeCategory,

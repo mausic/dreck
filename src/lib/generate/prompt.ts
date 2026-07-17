@@ -6,8 +6,8 @@ import type {
   ITokens,
   TSlotRole,
 } from "@/lib/slides/types";
-import type { IGroundingIssue } from "#/lib/generate/schema";
-import type { TDocOverview } from "#/lib/generate/sections";
+import type { IGroundingIssue } from "@/lib/generate/schema";
+import type { TDocOverview } from "@/lib/generate/sections";
 import { slotCharBudget } from "@/lib/ai/fit";
 
 export const PLAN_PROMPT_VERSION = "plan/v4";

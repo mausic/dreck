@@ -1,8 +1,8 @@
 import { useReducer, useRef } from "react";
 
-import type { IGroundingReport, TGenerationEvent } from "#/lib/generate/schema";
+import type { IGroundingReport, TGenerationEvent } from "@/lib/generate/schema";
 import type { IDeck, ISlide, ITokens } from "@/lib/slides/types";
-import { generateDeck } from "#/lib/generate/deck";
+import { generateDeck } from "@/lib/generate/deck";
 import { DESIGN_TOKENS } from "@/lib/slides/tokens";
 
 export type TGenerationPhase =

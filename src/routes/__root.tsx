@@ -11,7 +11,7 @@ import type { QueryClient } from "@tanstack/react-query";
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { NotFound } from "@/components/not-found";
-import { TooltipProvider } from "#/components/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 
 export const Route = createRootRouteWithContext<{

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { IArchetype } from "@/lib/slides/types";
-import { validateSlideFill } from "#/lib/generate/fill";
+import { validateSlideFill } from "@/lib/generate/fill";
 
 const archetype: IArchetype = {
   id: "test",

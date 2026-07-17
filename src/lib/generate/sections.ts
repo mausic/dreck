@@ -1,5 +1,5 @@
 import type { ISection } from "@/lib/extract/section";
-import type { TSlidePlan } from "#/lib/generate/schema";
+import type { TSlidePlan } from "@/lib/generate/schema";
 
 export interface IDocOverviewItem {
   id: string;

@@ -11,7 +11,7 @@ import {
 } from "drizzle-orm/pg-core";
 import type { ISection } from "@/lib/extract/section";
 import type { IExtractedArchetype, ISlide, ITokens } from "@/lib/slides/types";
-import type { IGroundingReport, TSlidePlan } from "#/lib/generate/schema";
+import type { IGroundingReport, TSlidePlan } from "@/lib/generate/schema";
 
 export const documentRoleEnum = pgEnum("document_role", ["content", "design"]);
 export type TDocumentRole = (typeof documentRoleEnum.enumValues)[number];

@@ -1,4 +1,4 @@
-import type { IGroundingIssue, IGroundingReport } from "#/lib/generate/schema";
+import type { IGroundingIssue, IGroundingReport } from "@/lib/generate/schema";
 import type { ISlide, ISlideElement } from "@/lib/slides/types";
 import { isLabelValue, isPanelContent, toLines } from "@/lib/slides/content";
 

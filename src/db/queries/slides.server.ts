@@ -4,7 +4,7 @@ import type { IGroundingReport } from "@/lib/generate/schema";
 import type { ISlide, ITokens } from "@/lib/slides/types";
 import type { getDb } from "@/db/client";
 import { decks, documents, slides } from "@/db/schema";
-import { GroundingReportSchema } from "#/lib/generate/schema";
+import { GroundingReportSchema } from "@/lib/generate/schema";
 import { SlideSchema } from "@/lib/slides/slide-schema";
 import { TokensSchema } from "@/lib/slides/tokens";
 

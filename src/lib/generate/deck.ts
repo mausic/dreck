@@ -9,7 +9,7 @@ import type {
   TGenerationEvent,
   TSlidePlan,
   TSlidePlanItem,
-} from "#/lib/generate/schema";
+} from "@/lib/generate/schema";
 import { getDb } from "@/db/client";
 import {
   createDeck,
@@ -24,21 +24,21 @@ import {
   ARCHETYPE_FAMILY_DESCRIPTORS,
   getArchetype,
 } from "@/lib/slides/archetypes";
-import { GenerateDeckInputSchema } from "#/lib/generate/schema";
-import { fallbackPlan, planDeck } from "#/lib/generate/plan";
+import { GenerateDeckInputSchema } from "@/lib/generate/schema";
+import { fallbackPlan, planDeck } from "@/lib/generate/plan";
 import {
   planArchetypes,
   planExtractedArchetypes,
-} from "#/lib/generate/pick-archetype";
-import { fillSlide } from "#/lib/generate/fill";
+} from "@/lib/generate/pick-archetype";
+import { fillSlide } from "@/lib/generate/fill";
 import { verifySlideGrounding } from "@/lib/ai/grounding";
 import { describeFitIssues, verifySlideFit } from "@/lib/ai/fit";
 import {
   isPlanGroundedToSections,
   selectSections,
   summarizeSections,
-} from "#/lib/generate/sections";
-import { describeGroundingIssues } from "#/lib/generate/prompt";
+} from "@/lib/generate/sections";
+import { describeGroundingIssues } from "@/lib/generate/prompt";
 import { fatalProviderMessage, isFatalProviderError } from "@/lib/ai/retry";
 import { runWithConcurrency } from "@/lib/ai/concurrency";
 import { getGenerationConfig } from "@/lib/config/generate-config";

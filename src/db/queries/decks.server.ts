@@ -1,11 +1,11 @@
 import { eq } from "drizzle-orm";
 
-import type { IGroundingReport, TSlidePlan } from "#/lib/generate/schema";
+import type { IGroundingReport, TSlidePlan } from "@/lib/generate/schema";
 import type { ISlide, ITokens } from "@/lib/slides/types";
 import type { TDeckStatus } from "@/db/schema";
 import type { getDb } from "@/db/client";
 import { decks, slides } from "@/db/schema";
-import { GroundingReportSchema, SlidePlanSchema } from "#/lib/generate/schema";
+import { GroundingReportSchema, SlidePlanSchema } from "@/lib/generate/schema";
 import { SlideSchema } from "@/lib/slides/slide-schema";
 import { TokensSchema } from "@/lib/slides/tokens";
 

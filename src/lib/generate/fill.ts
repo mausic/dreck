@@ -5,15 +5,15 @@ import type {
   IWireSlide,
   IWireSlideElement,
   TSlideFill,
-} from "#/lib/generate/schema";
-import { SlideFillSchema } from "#/lib/generate/schema";
+} from "@/lib/generate/schema";
+import { SlideFillSchema } from "@/lib/generate/schema";
 import { toSlotContent } from "@/lib/ai/content-patch";
 import {
   FILL_SYSTEM_PROMPT,
   buildFillPrompt,
   expectedKind,
   fillableSlots,
-} from "#/lib/generate/prompt";
+} from "@/lib/generate/prompt";
 import { getGenerateModel } from "@/lib/ai/model";
 import { withModelRetry } from "@/lib/ai/retry";
 

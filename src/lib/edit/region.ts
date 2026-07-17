@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { generateObject } from "ai";
 import type { TContentPatch } from "@/lib/ai/content-patch";
 import type { TEditRegionInput, TEditRegionResult } from "@/lib/edit/schema";
-import type { IWireSlide } from "#/lib/generate/schema";
+import type { IWireSlide } from "@/lib/generate/schema";
 import type { TSlotContent } from "@/lib/slides/types";
 import { getDb } from "@/db/client";
 import {

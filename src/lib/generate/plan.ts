@@ -1,10 +1,10 @@
 import { generateObject } from "ai";
 import type { ISection } from "@/lib/extract/section";
 import type { IArchetypeDescriptor } from "@/lib/slides/types";
-import type { TSlidePlan } from "#/lib/generate/schema";
-import type { TDocOverview } from "#/lib/generate/sections";
-import { MAX_SLIDES, SlidePlanSchema } from "#/lib/generate/schema";
-import { PLAN_SYSTEM_PROMPT, buildPlanPrompt } from "#/lib/generate/prompt";
+import type { TSlidePlan } from "@/lib/generate/schema";
+import type { TDocOverview } from "@/lib/generate/sections";
+import { MAX_SLIDES, SlidePlanSchema } from "@/lib/generate/schema";
+import { PLAN_SYSTEM_PROMPT, buildPlanPrompt } from "@/lib/generate/prompt";
 import { getGenerateModel } from "@/lib/ai/model";
 import { withModelRetry } from "@/lib/ai/retry";
 
