@@ -3,6 +3,7 @@
 import {
   IconInnerShadowTop,
   IconLayoutGrid,
+  IconPalette,
   IconPresentation,
 } from "@tabler/icons-react";
 import { Link, useRouterState } from "@tanstack/react-router";
@@ -22,6 +23,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     select: (state) => state.location.pathname,
   });
   const isDecks = pathname === "/decks" || pathname.startsWith("/decks/");
+  const isDesigns = pathname === "/designs" || pathname.startsWith("/designs/");
 
   return (
     <Sidebar collapsible="offcanvas" {...props}>
@@ -50,6 +52,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 >
                   <IconPresentation />
                   <span>New deck</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={isDesigns}
+                  tooltip="Extracted designs"
+                  render={<Link to="/designs" />}
+                >
+                  <IconPalette />
+                  <span>Extracted designs</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>

@@ -3,14 +3,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
 import type { AnyFieldApi } from "@tanstack/react-form";
-import type { IExtractedArchetype, ISlide, ITokens } from "@/lib/slides";
+import type { ITokens } from "@/lib/slides";
 import type { TGenerationSlot } from "@/hooks/use-deck-generation";
 import { useDeckGeneration } from "@/hooks/use-deck-generation";
 import {
   contentDocsQueryOptions,
   designDocsQueryOptions,
 } from "@/lib/documents/queries";
-import { previewContentForRole } from "@/lib/slides/preview-content";
+import { DesignSystemPreview } from "@/components/documents/design-system-preview";
 import { DeckPdfDownloadButton } from "@/components/slides/deck-pdf-download-button";
 import { DeckView } from "@/components/slides/deck-view";
 import { SlidePreview } from "@/components/slides/slide-preview";
@@ -36,104 +36,6 @@ function FieldError({ field, id }: { field: AnyFieldApi; id: string }) {
     <p id={id} role="alert" className="text-destructive text-xs">
       {message}
     </p>
-  );
-}
-
-function DesignSystemView({
-  sourceName,
-  tokens,
-  feel,
-  archetypes,
-}: {
-  sourceName: string;
-  tokens: ITokens;
-  feel?: string | null;
-  archetypes?: Array<IExtractedArchetype> | null;
-}) {
-  return (
-    <div className="flex flex-col gap-3 rounded-md border p-4">
-      <h3 className="text-sm font-semibold">
-        Design system{" "}
-        <span className="text-muted-foreground font-normal">
-          ({sourceName})
-        </span>
-      </h3>
-      <div className="flex flex-wrap gap-3">
-        {Object.entries(tokens.colors).map(([colorRole, hex]) => (
-          <div key={colorRole} className="flex items-center gap-2">
-            <span
-              className="h-8 w-8 rounded border"
-              style={{ background: hex }}
-            />
-            <span className="text-xs">
-              <span className="font-medium">{colorRole}</span>
-              <br />
-              <code className="text-muted-foreground">{hex}</code>
-            </span>
-          </div>
-        ))}
-      </div>
-      <div className="text-muted-foreground text-xs">
-        <p>
-          <span className="font-medium">display:</span> {tokens.fonts.display}
-        </p>
-        <p>
-          <span className="font-medium">body:</span> {tokens.fonts.body}
-        </p>
-        {feel && <p className="mt-1 italic">“{feel}”</p>}
-      </div>
-      {archetypes && archetypes.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <p className="text-xs font-medium">
-            {archetypes.length} extracted layouts
-          </p>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {archetypes.map((archetype) => (
-              <ArchetypePreview
-                key={archetype.id}
-                archetype={archetype}
-                tokens={tokens}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ArchetypePreview({
-  archetype,
-  tokens,
-}: {
-  archetype: IExtractedArchetype;
-  tokens: ITokens;
-}) {
-  const slide: ISlide = {
-    id: `preview-${archetype.id}`,
-    archetypeId: archetype.id,
-    elements: archetype.slots.map((slot) => ({
-      id: `preview-${archetype.id}--${slot.id}`,
-      slotId: slot.id,
-      role: slot.role,
-      x: slot.x,
-      y: slot.y,
-      w: slot.w,
-      h: slot.h,
-      content: previewContentForRole(slot.role),
-      styleRef: slot.styleRef,
-    })),
-  };
-
-  return (
-    <div className="flex min-w-0 flex-col gap-1">
-      <div className="bg-card aspect-video overflow-hidden rounded border">
-        <SlidePreview slide={slide} tokens={tokens} />
-      </div>
-      <p className="text-muted-foreground truncate text-[11px]">
-        {archetype.name}
-      </p>
-    </div>
   );
 }
 
@@ -285,12 +187,19 @@ export function GeneratePanel() {
                 : undefined;
               if (!doc?.designTokens) return null;
               return (
-                <DesignSystemView
-                  sourceName={doc.sourceName}
-                  tokens={doc.designTokens}
-                  feel={doc.designFeel}
-                  archetypes={doc.designArchetypes}
-                />
+                <div className="flex flex-col gap-3 rounded-md border p-4">
+                  <h3 className="text-sm font-semibold">
+                    Design system{" "}
+                    <span className="text-muted-foreground font-normal">
+                      ({doc.sourceName})
+                    </span>
+                  </h3>
+                  <DesignSystemPreview
+                    tokens={doc.designTokens}
+                    feel={doc.designFeel}
+                    archetypes={doc.designArchetypes}
+                  />
+                </div>
               );
             }}
           </form.Subscribe>

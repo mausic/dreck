@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DesignsIndexRouteImport } from './routes/designs.index'
 import { Route as DecksIndexRouteImport } from './routes/decks.index'
 import { Route as DecksDeckIdRouteImport } from './routes/decks.$deckId'
 import { Route as ApiDecksDeckIdPdfRouteImport } from './routes/api.decks.$deckId.pdf'
@@ -17,6 +18,11 @@ import { Route as ApiDecksDeckIdPdfRouteImport } from './routes/api.decks.$deckI
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DesignsIndexRoute = DesignsIndexRouteImport.update({
+  id: '/designs/',
+  path: '/designs/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DecksIndexRoute = DecksIndexRouteImport.update({
@@ -39,12 +45,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/decks/$deckId': typeof DecksDeckIdRoute
   '/decks/': typeof DecksIndexRoute
+  '/designs/': typeof DesignsIndexRoute
   '/api/decks/$deckId/pdf': typeof ApiDecksDeckIdPdfRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/decks/$deckId': typeof DecksDeckIdRoute
   '/decks': typeof DecksIndexRoute
+  '/designs': typeof DesignsIndexRoute
   '/api/decks/$deckId/pdf': typeof ApiDecksDeckIdPdfRoute
 }
 export interface FileRoutesById {
@@ -52,20 +60,29 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/decks/$deckId': typeof DecksDeckIdRoute
   '/decks/': typeof DecksIndexRoute
+  '/designs/': typeof DesignsIndexRoute
   '/api/decks/$deckId/pdf': typeof ApiDecksDeckIdPdfRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/decks/$deckId' | '/decks/' | '/api/decks/$deckId/pdf'
+  fullPaths:
+    '/' | '/decks/$deckId' | '/decks/' | '/designs/' | '/api/decks/$deckId/pdf'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/decks/$deckId' | '/decks' | '/api/decks/$deckId/pdf'
-  id: '__root__' | '/' | '/decks/$deckId' | '/decks/' | '/api/decks/$deckId/pdf'
+  to: '/' | '/decks/$deckId' | '/decks' | '/designs' | '/api/decks/$deckId/pdf'
+  id:
+    | '__root__'
+    | '/'
+    | '/decks/$deckId'
+    | '/decks/'
+    | '/designs/'
+    | '/api/decks/$deckId/pdf'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DecksDeckIdRoute: typeof DecksDeckIdRoute
   DecksIndexRoute: typeof DecksIndexRoute
+  DesignsIndexRoute: typeof DesignsIndexRoute
   ApiDecksDeckIdPdfRoute: typeof ApiDecksDeckIdPdfRoute
 }
 
@@ -76,6 +93,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/designs/': {
+      id: '/designs/'
+      path: '/designs'
+      fullPath: '/designs/'
+      preLoaderRoute: typeof DesignsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/decks/': {
@@ -106,6 +130,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DecksDeckIdRoute: DecksDeckIdRoute,
   DecksIndexRoute: DecksIndexRoute,
+  DesignsIndexRoute: DesignsIndexRoute,
   ApiDecksDeckIdPdfRoute: ApiDecksDeckIdPdfRoute,
 }
 export const routeTree = rootRouteImport

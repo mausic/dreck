@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import type { ISection } from "@/lib/extract/section";
 import type { IExtractedArchetype, ITokens } from "@/lib/slides/types";
@@ -142,8 +142,7 @@ export async function listDesignDocuments(db: TDb) {
     })
     .from(documents)
     .where(eq(documents.role, "design"))
-    .orderBy(desc(documents.createdAt))
-    .limit(20);
+    .orderBy(desc(documents.createdAt));
 
   return rows.flatMap((row) => {
     const tokens = TokensSchema.safeParse(row.designTokens);
@@ -159,4 +158,15 @@ export async function listDesignDocuments(db: TDb) {
       },
     ];
   });
+}
+
+export async function deleteDesignDocumentRecord(
+  db: TDb,
+  id: string,
+): Promise<boolean> {
+  const rows = await db
+    .delete(documents)
+    .where(and(eq(documents.id, id), eq(documents.role, "design")))
+    .returning({ id: documents.id });
+  return rows.length > 0;
 }
