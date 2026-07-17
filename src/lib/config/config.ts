@@ -3,7 +3,7 @@ import { z } from "zod";
 import { generateConfigSchema } from "./generate-config";
 
 const configSchema = z
-  .object({
+  .looseObject({
     DATABASE_URL: z.string().min(1, "Missing DATABASE_URL"),
     GOOGLE_GENERATIVE_AI_API_KEY: z
       .string()
@@ -13,7 +13,6 @@ const configSchema = z
     EDIT_MODEL: z.string().optional().default("gemini-3.5-flash"),
     DESIGN_MODEL: z.string().optional().default("gemini-3.5-flash"),
   })
-  .passthrough()
   .transform(
     ({
       DATABASE_URL,
