@@ -6,6 +6,7 @@ import type { IGroundingReport } from "@/lib/generate/schema";
 import type { ISlide } from "@/lib/slides/types";
 import type { TStoredDeckView } from "@/lib/decks/schema";
 import { AppShell } from "@/components/app-shell";
+import { DeckPdfDownloadButton } from "@/components/slides/deck-pdf-download-button";
 import { DeckView } from "@/components/slides/deck-view";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -113,9 +114,18 @@ function GeneratedDeckPage() {
               Source: {deck.contentSourceName}
             </p>
           </div>
-          <Link to="/decks" className={buttonVariants({ variant: "outline" })}>
-            Back to decks
-          </Link>
+          <div className="flex items-center gap-2">
+            <DeckPdfDownloadButton
+              deckId={deckId}
+              disabled={deck.generatedSlideCount === 0}
+            />
+            <Link
+              to="/decks"
+              className={buttonVariants({ variant: "outline" })}
+            >
+              Back to decks
+            </Link>
+          </div>
         </div>
 
         {deck.error && (

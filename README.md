@@ -10,7 +10,7 @@ The product decisions and complete generation/edit flows are documented in
 ## Stack
 
 - TanStack Start and React 19
-- Cloudflare Workers
+- Cloudflare Workers and Browser Rendering
 - Drizzle ORM with PostgreSQL on Neon
 - AI SDK with Google models and Mistral OCR
 - Tailwind CSS and shadcn/ui
@@ -32,6 +32,11 @@ The application runs at `http://localhost:3000`.
 
 PDF uploads are limited to 15 MB. Design PDFs are limited to 12 pages; each page is
 isolated before layout extraction so the full deck is not resent for every archetype.
+
+Generated decks can be downloaded as PDFs from their detail page. In local development,
+the `BROWSER` binding runs remotely against the authenticated Cloudflare account, so run
+`pnpm exec wrangler login` before testing PDF downloads. Each export consumes Browser
+Rendering usage; the generated response is streamed directly and is not cached.
 
 ## Commands
 

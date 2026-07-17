@@ -11,6 +11,7 @@ import {
   designDocsQueryOptions,
 } from "@/lib/documents/queries";
 import { previewContentForRole } from "@/lib/slides/preview-content";
+import { DeckPdfDownloadButton } from "@/components/slides/deck-pdf-download-button";
 import { DeckView } from "@/components/slides/deck-view";
 import { SlidePreview } from "@/components/slides/slide-preview";
 import { DocumentPicker } from "@/components/documents/document-select";
@@ -397,12 +398,18 @@ export function GeneratePanel() {
       </section>
 
       {!isGenerating && editorDeck && (
-        <DeckView
-          deck={editorDeck}
-          tokens={generation.tokens}
-          slideNumbers={generation.slideNumbers}
-          onSlideChange={generation.updateSlide}
-        />
+        <section className="flex min-h-0 flex-1 flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold">Deck preview</h2>
+            <DeckPdfDownloadButton deckId={editorDeck.id} />
+          </div>
+          <DeckView
+            deck={editorDeck}
+            tokens={generation.tokens}
+            slideNumbers={generation.slideNumbers}
+            onSlideChange={generation.updateSlide}
+          />
+        </section>
       )}
     </div>
   );
