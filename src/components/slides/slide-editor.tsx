@@ -20,15 +20,6 @@ export interface ISlideEditorProps {
   ) => void;
 }
 
-/**
- * The region-edit workspace for a single slide: draw a rectangle on the preview to
- * select elements, then apply an instruction that rewrites only those elements.
- *
- * State here is intentionally transient — selection rectangle + instruction text.
- * Because the selection is stored in CANONICAL units (not pixels), it survives window
- * resizes untouched: the preview simply re-scales the same canonical rect. Mount this
- * keyed by `slide.id` so switching slides starts with a clean selection.
- */
 export function SlideEditor({
   deckId,
   slide,
