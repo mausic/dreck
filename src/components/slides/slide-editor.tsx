@@ -1,36 +1,43 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { IRect, ISelectionRect, ISlide, ITokens } from "@/lib/slides";
-import { applyPatch, elementsInRect, toLines } from "@/lib/slides";
-import { editRegion } from "@/lib/ai/edit-region";
+import { applyPatch, editableElementsInRect } from "@/lib/slides";
+import { editRegion } from "@/lib/edit/region";
 import { SlidePreview } from "@/components/slides/slide-preview";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export interface ISlideEditorProps {
+  deckId: string;
   slide: ISlide;
+  revision: number;
   tokens: ITokens;
-  /** Persist an edited slide back up to the deck (immutable replace). */
-  onChange: (slide: ISlide) => void;
+  onChange: (slide: ISlide, revision: number) => void;
 }
 
 /**
  * The region-edit workspace for a single slide: draw a rectangle on the preview to
- * select elements, then apply a (mock) instruction that rewrites only those elements.
+ * select elements, then apply an instruction that rewrites only those elements.
  *
  * State here is intentionally transient — selection rectangle + instruction text.
  * Because the selection is stored in CANONICAL units (not pixels), it survives window
  * resizes untouched: the preview simply re-scales the same canonical rect. Mount this
  * keyed by `slide.id` so switching slides starts with a clean selection.
  */
-export function SlideEditor({ slide, tokens, onChange }: ISlideEditorProps) {
+export function SlideEditor({
+  deckId,
+  slide,
+  revision,
+  tokens,
+  onChange,
+}: ISlideEditorProps) {
   const [selection, setSelection] = useState<ISelectionRect | null>(null);
   const [instruction, setInstruction] = useState("");
   const [pending, setPending] = useState(false);
 
   // Hit-test is derived, never stored: single source of truth is the canonical rect.
   const selectedElements = useMemo(
-    () => (selection ? elementsInRect(selection, slide.elements) : []),
+    () => (selection ? editableElementsInRect(selection, slide.elements) : []),
     [selection, slide.elements],
   );
   const selectedIds = useMemo(
@@ -54,28 +61,29 @@ export function SlideEditor({ slide, tokens, onChange }: ISlideEditorProps) {
    * failure leaves the deck untouched and surfaces a toast — never a crash.
    */
   async function handleApply() {
-    if (!canApply) return;
+    if (!canApply || !selection) return;
     setPending(true);
     try {
       const result = await editRegion({
         data: {
+          deckId,
+          slideId: slide.id,
+          expectedRevision: revision,
           instruction: instruction.trim(),
-          // The editable targets — exactly the hit-tested selection.
-          targets: selectedElements.map((el) => ({
-            id: el.id,
-            role: el.role,
-            content: el.content,
-          })),
-          // Read-only sibling text, for coherence (never edited).
-          context: slide.elements
-            .filter((el) => !selectedIds.has(el.id))
-            .flatMap((el) => toLines(el.content)),
-          tokens,
+          selection: {
+            x: selection.x,
+            y: selection.y,
+            width: selection.width,
+            height: selection.height,
+          },
         },
       });
       if (result.ok) {
-        onChange(applyPatch(slide, result.patch));
+        onChange(applyPatch(slide, result.patch), result.revision);
       } else {
+        if (result.conflict) {
+          onChange(result.conflict.slide, result.conflict.revision);
+        }
         toast.error("Edit not applied", { description: result.error });
       }
     } catch {

@@ -1,19 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
 import type { AnyFieldApi } from "@tanstack/react-form";
 import type {
-  IDeck,
   IExtractedArchetype,
   ISlide,
   ITokens,
   TSlotContent,
   TSlotRole,
 } from "@/lib/slides";
-import type { IGroundingReport } from "@/lib/ai/generate-schema";
-import { DESIGN_TOKENS } from "@/lib/slides";
-import { generateDeck } from "@/lib/ai/generate-deck";
+import type { TGenerationSlot } from "@/hooks/use-deck-generation";
+import { useDeckGeneration } from "@/hooks/use-deck-generation";
 import {
   contentDocsQueryOptions,
   designDocsQueryOptions,
@@ -27,15 +25,6 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 
-/** Per-slide UI state as events stream in: a placeholder, a finished slide, or a failure. */
-type TSlotState =
-  | { status: "pending"; title: string }
-  | { status: "ready"; slide: ISlide; grounding: IGroundingReport }
-  | { status: "error"; message: string };
-
-type TStatus = "idle" | "generating" | "done" | "error";
-
-/** The generate form's fields, validated on change. `designDocId` is optional (default tokens). */
 const GenerateFormSchema = z.object({
   contentDocId: z.string().min(1, "Pick a content document"),
   prompt: z.string().trim().min(1, "Describe the deck"),
@@ -43,7 +32,6 @@ const GenerateFormSchema = z.object({
   designDocId: z.string(),
 });
 
-/** The first validation error for a touched field, rendered as a small destructive line. */
 function FieldError({ field }: { field: AnyFieldApi }) {
   if (!field.state.meta.isTouched) return null;
   const first = field.state.meta.errors[0];
@@ -52,7 +40,6 @@ function FieldError({ field }: { field: AnyFieldApi }) {
   return <p className="text-destructive text-xs">{message}</p>;
 }
 
-/** The extracted design system (palette swatches + fonts + feel note) for a design document. */
 function DesignSystemView({
   sourceName,
   id,
@@ -178,14 +165,13 @@ function ArchetypePreview({
   );
 }
 
-/** One card in the progressive grid: a 16:9 preview/skeleton with an index + grounding badge. */
 function SlotCard({
   index,
   state,
   tokens,
 }: {
   index: number;
-  state: TSlotState;
+  state: TGenerationSlot;
   tokens: ITokens;
 }) {
   return (
@@ -224,98 +210,19 @@ function SlotCard({
 }
 
 export function GeneratePanel() {
-  // Shared, cached source lists — the DocumentPickers below fold fresh uploads into this cache.
   const contentDocs = useQuery(contentDocsQueryOptions());
   const designDocs = useQuery(designDocsQueryOptions());
 
-  const [status, setStatus] = useState<TStatus>("idle");
-  const [topError, setTopError] = useState<string | null>(null);
-  const [items, setItems] = useState<Array<TSlotState>>([]);
-  const [doneDeck, setDoneDeck] = useState<IDeck | null>(null);
-  // The design tokens the deck is styled with — set from the plan event (the extracted design
-  // system), falling back to the placeholder tokens until then / when no design doc is chosen.
-  const [tokens, setTokens] = useState<ITokens>(DESIGN_TOKENS);
-
-  /** Run generation and stream slide/plan/error events into the progressive-grid state. */
-  async function runGeneration(value: {
-    contentDocId: string;
-    designDocId?: string;
-    prompt: string;
-  }) {
-    setStatus("generating");
-    setTopError(null);
-    setDoneDeck(null);
-    setItems([]);
-    setTokens(DESIGN_TOKENS);
-
-    const readyByIndex = new Map<number, ISlide>();
-    let sawDone = false;
-
-    try {
-      const events = await generateDeck({
-        data: {
-          contentDocId: value.contentDocId,
-          prompt: value.prompt.trim(),
-          designDocId: value.designDocId || undefined,
-        },
-      });
-      for await (const ev of events) {
-        if (ev.type === "plan") {
-          setTokens(ev.tokens);
-          setItems(
-            ev.plan.slides.map((s) => ({ status: "pending", title: s.title })),
-          );
-        } else if (ev.type === "slide") {
-          readyByIndex.set(ev.index, ev.slide);
-          setItems((prev) => {
-            const next = prev.slice();
-            next[ev.index] = {
-              status: "ready",
-              slide: ev.slide,
-              grounding: ev.grounding,
-            };
-            return next;
-          });
-        } else if (ev.type === "error") {
-          if (typeof ev.index === "number") {
-            const at = ev.index;
-            setItems((prev) => {
-              const next = prev.slice();
-              next[at] = { status: "error", message: ev.message };
-              return next;
-            });
-          } else {
-            setTopError(ev.message);
-          }
-        } else {
-          // Only the "done" variant remains.
-          sawDone = true;
-          const ordered = Array.from({ length: ev.slideCount }, (_, i) =>
-            readyByIndex.get(i),
-          ).filter((s): s is ISlide => s !== undefined);
-          setDoneDeck({ id: ev.deckId, slides: ordered });
-          setStatus(ordered.length > 0 ? "done" : "error");
-        }
-      }
-      if (!sawDone) setStatus("error");
-    } catch (error) {
-      setTopError(
-        error instanceof Error ? error.message : "Generation failed.",
-      );
-      setStatus("error");
-    }
-  }
+  const generation = useDeckGeneration();
 
   const form = useForm({
     defaultValues: { contentDocId: "", designDocId: "", prompt: "" },
     validators: { onChange: GenerateFormSchema },
     onSubmit: async ({ value }) => {
-      await runGeneration(value);
+      await generation.generate(value);
     },
   });
 
-  // Seed each picker with the newest doc once its list resolves (mirrors the prior default), but
-  // only while the field is still empty, so a user's choice / cleared selection is respected.
   const contentData = contentDocs.data;
   useEffect(() => {
     const first = contentData?.[0]?.id;
@@ -332,9 +239,9 @@ export function GeneratePanel() {
     }
   }, [designData, form]);
 
-  const isGenerating = status === "generating";
-  const editorDeck = doneDeck;
-  const flagged = items.flatMap((it, i) =>
+  const isGenerating = generation.phase === "generating";
+  const editorDeck = generation.deck;
+  const flagged = generation.items.flatMap((it, i) =>
     it.status === "ready" && !it.grounding.ok
       ? [{ index: i, tokens: it.grounding.issues.map((x) => x.token) }]
       : [],
@@ -362,7 +269,7 @@ export function GeneratePanel() {
         >
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="content-doc">Content document</Label>
+              <Label htmlFor="content-doc">📜 Content document</Label>
               <form.Field name="contentDocId">
                 {(field) => (
                   <>
@@ -382,7 +289,7 @@ export function GeneratePanel() {
               </form.Field>
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="design-doc">Design (optional)</Label>
+              <Label htmlFor="design-doc">🎨 Design</Label>
               <form.Field name="designDocId">
                 {(field) => (
                   <DocumentPicker
@@ -449,9 +356,9 @@ export function GeneratePanel() {
           </div>
         </form>
 
-        {topError && (
+        {generation.error && (
           <p className="border-destructive/50 text-destructive rounded-md border p-3 text-sm">
-            {topError}
+            {generation.error}
           </p>
         )}
 
@@ -464,22 +371,26 @@ export function GeneratePanel() {
           </p>
         )}
 
-        {/* The progressive grid is the live view WHILE generating (and stays on error so per-slide
-            failures remain visible). Once a deck finishes it collapses — the full editor below is
-            the deck's single preview from then on. */}
-        {items.length > 0 && status !== "done" && (
+        {generation.items.length > 0 && generation.phase !== "complete" && (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {items.map((state, i) => (
-              <SlotCard key={i} index={i} state={state} tokens={tokens} />
+            {generation.items.map((state, i) => (
+              <SlotCard
+                key={i}
+                index={i}
+                state={state}
+                tokens={generation.tokens}
+              />
             ))}
           </div>
         )}
       </section>
 
-      {/* Once done, the full editor is the deck's only preview. Keyed by deck id so the editor
-          mounts fresh when a generated deck replaces the placeholder. */}
       {!isGenerating && editorDeck && (
-        <DeckView key={editorDeck.id} deck={editorDeck} tokens={tokens} />
+        <DeckView
+          deck={editorDeck}
+          tokens={generation.tokens}
+          onSlideChange={generation.updateSlide}
+        />
       )}
     </div>
   );

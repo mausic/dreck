@@ -25,7 +25,6 @@ type TDocumentSelectProps = {
   className?: string;
 };
 
-/** The list-item / trigger label for a document: its filename + a short id. */
 function docLabel(doc: TDocOption): string {
   return `${doc.sourceName} · ${doc.id.slice(0, 8)}`;
 }
@@ -72,7 +71,6 @@ export function DocumentSelect({
   );
 }
 
-/** In-flight upload for a `DocumentPicker`: the chosen file, whether extraction is running, error. */
 type TUploadState = {
   file: File | null;
   pending: boolean;
@@ -117,13 +115,6 @@ type TDocumentPickerProps = {
   ariaLabel?: string;
 };
 
-/**
- * `DocumentPicker` — select an existing document or upload a new PDF, in one control.
- *
- * The list picker appears once the shared cache has documents of this role; below it, the dropzone
- * accepts a new PDF. On a successful upload the new document is folded into the cache (so it shows
- * in the list) and selected via `onValueChange`, so the form field immediately reflects it.
- */
 export function DocumentPicker({
   role,
   value,

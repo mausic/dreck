@@ -1,14 +1,3 @@
-/**
- * Generation prompts — versioned constants in code (the two DB-backed prompts are the
- * extraction prompts, a later task). Two model calls, two prompts:
- *   • PLAN — the user's chat prompt + a compact document overview → a slide plan. The prompt
- *     drives the slide count; the model selects which sections feed each slide.
- *   • FILL — one slide's archetype slots + its selected sections' verbatim content + design
- *     tokens → content per slot. Facts come ONLY from the provided sections; nothing invented.
- *
- * Both keep the model in a planner/filler role: it never decides its own next action. The
- * orchestrator (`generate-deck.ts`) owns the loop.
- */
 import type { ISection } from "@/lib/extract/section";
 import type {
   IArchetype,
@@ -17,15 +6,13 @@ import type {
   ITokens,
   TSlotRole,
 } from "@/lib/slides/types";
-import type { IGroundingIssue } from "@/lib/ai/generate-schema";
-import type { TDocOverview } from "@/lib/ai/sections";
+import type { IGroundingIssue } from "#/lib/generate/schema";
+import type { TDocOverview } from "#/lib/generate/sections";
 import { slotCharBudget } from "@/lib/ai/fit";
 
-/** Bump when wording below changes materially, so runs stay attributable. */
 export const PLAN_PROMPT_VERSION = "plan/v4";
 export const FILL_PROMPT_VERSION = "fill/v1";
 
-/** System policy for the planner: turn a brief into a right-sized, section-grounded plan. */
 export const PLAN_SYSTEM_PROMPT = `You are a presentation planner for a corporate slide deck. You decide, for each slide, both what it covers AND which available layout (archetype) presents it best. Choosing the layout is a core part of your job, not an afterthought.
 
 You are given the user's brief and a compact overview of a source document (a list of sections, each with an id, title, kind, and a short snippet).
@@ -45,7 +32,6 @@ How to choose well:
 
 Respond with { "slides": [{ "intent", "title", "sectionIds", "archetypeId" }, ...] } in reading order.`;
 
-/** Assemble the planner's task message from the brief, overview, and available archetypes. */
 export function buildPlanPrompt(
   brief: string,
   overview: TDocOverview,
@@ -79,7 +65,6 @@ Document overview (choose section ids from these only):
 ${sections}`;
 }
 
-/** The content kind the fill model must emit for a slot, derived from its role. */
 export function expectedKind(role: TSlotRole): string {
   switch (role) {
     case "tableRow":
@@ -95,12 +80,10 @@ export function expectedKind(role: TSlotRole): string {
   }
 }
 
-/** Slots the fill model writes content into — everything except pure-visual `block` slots. */
 export function fillableSlots(archetype: IArchetype): Array<ISlot> {
   return archetype.slots.filter((slot) => slot.role !== "block");
 }
 
-/** System policy for the fill: pour selected content into the archetype's slots, grounded. */
 export const FILL_SYSTEM_PROMPT = `You are a slide copywriter for a corporate deck.
 
 You are given one slide to fill: its intent, its layout slots (each with a slotId, role, the content "kind" it expects, and a size hint), the verbatim source content selected for this slide, and the deck's design tokens.
@@ -117,7 +100,6 @@ Rules:
 
 Respond with { "slots": [{ "slotId", "content" }, ...] } covering the listed slots.`;
 
-/** Assemble the fill task message for one slide. */
 export function buildFillPrompt(args: {
   intent: string;
   title: string;
@@ -162,7 +144,6 @@ ${source}
 Design tone (brand cue): display font ${args.tokens.fonts.display}; body font ${args.tokens.fonts.body}; primary ${args.tokens.colors.primary}; accent ${args.tokens.colors.accent}.`;
 }
 
-/** Render grounding issues into a short note the retry pass can act on. */
 export function describeGroundingIssues(
   issues: Array<IGroundingIssue>,
 ): string {

@@ -11,9 +11,8 @@ import {
 } from "drizzle-orm/pg-core";
 import type { ISection } from "@/lib/extract/section";
 import type { IExtractedArchetype, ISlide, ITokens } from "@/lib/slides/types";
-import type { IGroundingReport, TSlidePlan } from "@/lib/ai/generate-schema";
+import type { IGroundingReport, TSlidePlan } from "#/lib/generate/schema";
 
-/** Which half of the two-PDF upload a document is: the content PDF or the design PDF. */
 export const documentRoleEnum = pgEnum("document_role", ["content", "design"]);
 export type TDocumentRole = (typeof documentRoleEnum.enumValues)[number];
 
@@ -49,11 +48,6 @@ export const documents = pgTable(
 export type TDocumentRow = typeof documents.$inferSelect;
 export type TNewDocument = typeof documents.$inferInsert;
 
-/**
- * A generated deck: the user's chat prompt, the content document it drew from, and the
- * planner's {@link TSlidePlan} (kept so a deck's slide count/coverage stays attributable to
- * the plan that produced it). Slides hang off this row.
- */
 export const decks = pgTable(
   "decks",
   {
@@ -88,11 +82,6 @@ export const decks = pgTable(
 export type TDeckRow = typeof decks.$inferSelect;
 export type TNewDeck = typeof decks.$inferInsert;
 
-/**
- * One generated slide. `slide` is the full flat {@link ISlide} (elements embedded) so it
- * renders/edits through the existing pipeline unchanged; `grounding` holds the verify step's
- * report (out-of-band flags), `index` fixes deck order.
- */
 export const slides = pgTable(
   "slides",
   {

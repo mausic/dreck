@@ -1,7 +1,3 @@
-/**
- * Design-system extraction: deterministic fonts and page count plus model-derived visual details.
- * Every PDF page receives one archetype detail call; no model decides which pages are worth keeping.
- */
 import {
   NoObjectGeneratedError,
   NoOutputGeneratedError,

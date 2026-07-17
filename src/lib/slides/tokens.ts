@@ -1,11 +1,6 @@
 import { z } from "zod";
 import type { ITokens } from "@/lib/slides/types";
 
-/**
- * Canonical Zod schema for {@link ITokens}. One definition consumed everywhere a Tokens object
- * is parsed — the region-edit tone cue and the design-system extraction output — so the extracted
- * design system provably matches the shape the renderer/editor/generation already consume.
- */
 export const TokensSchema = z.object({
   colors: z.object({
     primary: z.string(),
@@ -21,9 +16,6 @@ export const TokensSchema = z.object({
   }),
 }) satisfies z.ZodType<ITokens>;
 
-/**
- * Default design tokens.
- */
 export const DESIGN_TOKENS: ITokens = {
   colors: {
     primary: "#0d3b5c", // brand primary — title bg + callout panels (approx. deep navy)

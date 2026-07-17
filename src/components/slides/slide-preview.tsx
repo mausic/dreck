@@ -41,18 +41,6 @@ function normalize(ax: number, ay: number, bx: number, by: number): IRect {
   };
 }
 
-/**
- * Renders one slide as a canonical 1440×810 stage scaled to fill its container,
- * aspect-ratio locked. The active tokens are written as `--slide-*` CSS custom
- * properties on the stage, so element style presets (which reference those vars)
- * restyle instantly when the tokens change.
- *
- * When `onSelectRect` is supplied the preview becomes an interactive selection
- * surface: the user drags a rectangle, a live overlay tracks the pointer, and on
- * release the region is handed to {@link previewRectToCanonical}. The scale it inverts
- * is owned by {@link useCanvasScale} — the single seam shared with rendering, so a
- * drawn box and a drawn element can never disagree about where "canonical" is.
- */
 export function SlidePreview({
   slide,
   tokens,
@@ -91,9 +79,6 @@ export function SlidePreview({
     ...tokenVars,
   } as CSSProperties;
 
-  // — Pointer handlers (only wired when interactive). All px↔canonical math is
-  //   delegated to previewRectToCanonical; nothing here scales coordinates itself. —
-
   /** Pointer position relative to the preview container's top-left, in CSS px. */
   function localPoint(event: PointerEvent<HTMLDivElement>) {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -102,7 +87,8 @@ export function SlidePreview({
 
   /** Begin a drag: capture the pointer and record the start corner. */
   function handlePointerDown(event: PointerEvent<HTMLDivElement>) {
-    if (!interactive || scale <= 0) return;
+    if (!interactive || scale <= 0 || event.button !== 0 || !event.isPrimary)
+      return;
     // Capture keeps move/up firing if the pointer leaves the box mid-drag. It can throw
     // for an inactive pointer id — that's non-fatal, so never let it abort the drag.
     try {
@@ -125,7 +111,8 @@ export function SlidePreview({
   function handlePointerUp(event: PointerEvent<HTMLDivElement>) {
     if (!drag) return;
     const rect = event.currentTarget.getBoundingClientRect();
-    const local = normalize(drag.sx, drag.sy, drag.cx, drag.cy);
+    const end = localPoint(event);
+    const local = normalize(drag.sx, drag.sy, end.x, end.y);
     setDrag(null);
 
     // A click or a negligible drag clears the selection.
@@ -140,7 +127,10 @@ export function SlidePreview({
       width: local.width,
       height: local.height,
     };
-    onSelectRect?.(previewRectToCanonical(viewportRect, { rect, scale }));
+    const canonical = previewRectToCanonical(viewportRect, { rect, scale });
+    onSelectRect?.(
+      canonical.width > 0 && canonical.height > 0 ? canonical : null,
+    );
   }
 
   const liveOverlay = drag
@@ -161,8 +151,6 @@ export function SlidePreview({
       onPointerUp={interactive ? handlePointerUp : undefined}
       onPointerCancel={interactive ? () => setDrag(null) : undefined}
     >
-      {/* Rendered box, centered in the container. Hidden until first measure so the
-          stage never flashes at scale 0 / distorted. */}
       <div
         style={{
           position: "absolute",
@@ -183,8 +171,6 @@ export function SlidePreview({
             />
           ))}
 
-          {/* Committed selection marquee, drawn in canonical units so it scales with
-              the stage and sits exactly where the mapped rect says it should. */}
           {selectionRect ? (
             <div
               aria-hidden
@@ -203,7 +189,6 @@ export function SlidePreview({
         </div>
       </div>
 
-      {/* Live drag overlay, drawn in container-local px on top of everything. */}
       {liveOverlay ? (
         <div
           aria-hidden

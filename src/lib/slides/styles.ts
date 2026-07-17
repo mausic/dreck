@@ -1,13 +1,5 @@
 import type { CSSProperties } from "react";
 
-/**
- * Style resolution seam: maps a `styleRef` (opaque string on the model) to concrete
- * CSS. Presets reference `--slide-*` CSS custom properties that `SlidePreview` sets
- * from the active {@link import("./types").ITokens} — so swapping the tokens object
- * restyles every element without touching the model or these presets.
- */
-
-/** Canonical styleRef keys. Shared by archetypes (skeleton) and the deck (content). */
 export const STYLE_REF = {
   titleBg: "title/bg",
   titleLogo: "title/logo",
@@ -66,13 +58,11 @@ export const STYLE_REF = {
 
 type TKnownStyleRef = (typeof STYLE_REF)[keyof typeof STYLE_REF];
 
-/** Style references the design extractor is allowed to assign to generated slots. */
 export const STYLE_REFS = Object.values(STYLE_REF) as [
   TKnownStyleRef,
   ...Array<TKnownStyleRef>,
 ];
 
-/** Presets that paint visual regions instead of text. */
 export const BLOCK_STYLE_REFS = new Set<string>([
   STYLE_REF.titleBg,
   STYLE_REF.titleRule,
@@ -83,13 +73,11 @@ export const BLOCK_STYLE_REFS = new Set<string>([
   STYLE_REF.sidebarPanelBg,
 ]);
 
-/** Block presets whose contained text needs light-on-dark styling. */
 export const DARK_BLOCK_STYLE_REFS = new Set<string>([
   STYLE_REF.titleBg,
   STYLE_REF.sidebarPanelBg,
 ]);
 
-/** Block presets that define a containing surface for nested text. */
 export const SURFACE_BLOCK_STYLE_REFS = new Set<string>([
   STYLE_REF.titleBg,
   STYLE_REF.cardBg,
@@ -97,7 +85,6 @@ export const SURFACE_BLOCK_STYLE_REFS = new Set<string>([
   STYLE_REF.sidebarPanelBg,
 ]);
 
-/** Text presets designed to render on a primary/dark surface. */
 export const DARK_TEXT_STYLE_REFS = new Set<string>([
   STYLE_REF.titleLogo,
   STYLE_REF.titleEyebrow,
@@ -448,7 +435,6 @@ const STYLE_PRESETS: Record<string, CSSProperties> = {
   },
 };
 
-/** Resolve a styleRef to concrete CSS. Unknown refs render unstyled (never throw). */
 export function resolveStyle(styleRef: string): CSSProperties {
   return STYLE_PRESETS[styleRef] ?? {};
 }

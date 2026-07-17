@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { ISlideElement } from "@/lib/slides/types";
-import { elementsInRect, previewRectToCanonical } from "@/lib/slides/geometry";
+import {
+  editableElementsInRect,
+  elementsInRect,
+  previewRectToCanonical,
+} from "@/lib/slides/geometry";
 
 /** Build a DOMRect-shaped object for tests (only l/t/w/h are read by the function). */
 function domRect(
@@ -88,6 +92,32 @@ describe("previewRectToCanonical", () => {
       { rect: domRect(0, 0, 360, 202.5), scale: 0.25 },
     );
     expect(atQuarter).toEqual({ x: 300, y: 200, width: 150, height: 75 });
+  });
+
+  it("clamps selections to the canonical canvas", () => {
+    const out = previewRectToCanonical(
+      { x: -20, y: -10, width: 1500, height: 900 },
+      { rect: domRect(0, 0, 1440, 810), scale: 1 },
+    );
+
+    expect(out).toEqual({ x: 0, y: 0, width: 1440, height: 810 });
+  });
+});
+
+describe("editableElementsInRect", () => {
+  it("excludes visual blocks while retaining overlapping text", () => {
+    const background = {
+      ...el("background", 0, 0, 1440, 810),
+      role: "block" as const,
+    };
+    const title = el("title", 100, 100, 400, 100);
+
+    expect(
+      editableElementsInRect({ x: 100, y: 100, width: 400, height: 100 }, [
+        background,
+        title,
+      ]).map((element) => element.id),
+    ).toEqual(["title"]);
   });
 });
 

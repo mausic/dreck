@@ -52,8 +52,11 @@ src/
     queries/         server-only, runtime-validated Drizzle operations
   hooks/             client workflow state machines
   lib/
-    ai/              planning, filling, grounding, editing, provider policies
+    ai/
+      *.ts           shared model, retry, grounding, fit, and concurrency utilities
     documents/       document server functions and query options
+    edit/          region-edit contracts, prompts, and server function
+    generate/      deck planning, filling, contracts, and orchestration
     extract/         content and design-system extraction
     slides/          pure slide domain, schemas, geometry, rendering contracts
   routes/            TanStack file routes

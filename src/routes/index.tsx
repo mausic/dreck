@@ -9,15 +9,11 @@ import {
 } from "@/lib/documents/queries";
 
 export const Route = createFileRoute("/")({
-  // Best-effort: warm the shared document caches during SSR so the pickers are populated on first
-  // paint. Never fail the route if the DB is unavailable — the panels handle empty/error softly.
-  loader: ({ context }) => {
-    void context.queryClient
-      .ensureQueryData(contentDocsQueryOptions())
-      .catch(() => {});
-    void context.queryClient
-      .ensureQueryData(designDocsQueryOptions())
-      .catch(() => {});
+  loader: async ({ context }) => {
+    await Promise.allSettled([
+      context.queryClient.ensureQueryData(contentDocsQueryOptions()),
+      context.queryClient.ensureQueryData(designDocsQueryOptions()),
+    ]);
   },
   component: Home,
 });

@@ -39,7 +39,6 @@ export interface IArchetypeEnhancementResult {
 }
 
 export interface IArchetypeEnhancementOptions {
-  /** Disable catalog-level cover/count rules when preparing one detail call in isolation. */
   validateCatalog?: boolean;
 }
 
