@@ -4,7 +4,7 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import type { TDeckListItem } from "@/lib/decks/schema";
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -46,7 +46,9 @@ function GeneratedDecksPage() {
               Reopen a generated deck and continue editing its persisted slides.
             </p>
           </div>
-          <Button render={<Link to="/" />}>Generate new deck</Button>
+          <Link to="/" className={buttonVariants()}>
+            Generate new deck
+          </Link>
         </div>
 
         {decks.length === 0 ? (
@@ -55,9 +57,9 @@ function GeneratedDecksPage() {
             <p className="text-muted-foreground max-w-md text-sm">
               Generate a deck from a content PDF and it will appear here.
             </p>
-            <Button variant="outline" render={<Link to="/" />}>
+            <Link to="/" className={buttonVariants({ variant: "outline" })}>
               Generate your first deck
-            </Button>
+            </Link>
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
@@ -84,15 +86,16 @@ function GeneratedDecksPage() {
                   </time>
                 </CardContent>
                 <CardFooter>
-                  <Button
-                    className="w-full"
-                    variant="outline"
-                    render={
-                      <Link to="/decks/$deckId" params={{ deckId: deck.id }} />
-                    }
+                  <Link
+                    to="/decks/$deckId"
+                    params={{ deckId: deck.id }}
+                    className={buttonVariants({
+                      variant: "outline",
+                      className: "w-full",
+                    })}
                   >
                     Open deck
-                  </Button>
+                  </Link>
                 </CardFooter>
               </Card>
             ))}
