@@ -2,6 +2,7 @@ import { z } from "zod";
 import { getConfig } from "@/lib/config";
 
 const OCR_ENDPOINT = "https://api.mistral.ai/v1/ocr";
+const OCR_TIMEOUT_MS = 60_000;
 
 export class MistralOcrError extends Error {
   constructor(message: string) {
@@ -43,6 +44,7 @@ export async function pdfToMarkdown(pdfBase64: string): Promise<string> {
       },
       include_image_base64: false,
     }),
+    signal: AbortSignal.timeout(OCR_TIMEOUT_MS),
   });
 
   if (!response.ok) {

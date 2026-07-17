@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { TDocOption } from "@/lib/documents/queries";
 import { documentsKeys } from "@/lib/documents/queries";
 import { extractDocument } from "@/lib/extract/extract-document";
+import { MAX_PDF_BYTES } from "@/lib/extract/extract-schema";
 import { cn } from "@/lib/utils";
 import { FileDropzone } from "@/components/ui/dropzone";
 import {
@@ -132,6 +133,25 @@ export function DocumentPicker({
 
   /** Extract the dropped file, fold the new doc into the shared cache, and select it. */
   async function runExtract(file: File) {
+    if (file.size > MAX_PDF_BYTES) {
+      setUpload({
+        file,
+        pending: false,
+        error: `PDF exceeds the ${MAX_PDF_BYTES / 1_000_000} MB upload limit.`,
+      });
+      return;
+    }
+    if (
+      file.type !== "application/pdf" &&
+      !file.name.toLowerCase().endsWith(".pdf")
+    ) {
+      setUpload({
+        file,
+        pending: false,
+        error: "Only PDF files can be uploaded.",
+      });
+      return;
+    }
     setUpload({ file, pending: true, error: null });
     try {
       const pdfBase64 = await readAsBase64(file);

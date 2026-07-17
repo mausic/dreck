@@ -4,6 +4,7 @@ import {
   Output,
   generateText,
 } from "ai";
+import { PDFDocument, ParseSpeeds } from "pdf-lib";
 import { z } from "zod";
 import type {
   IExtractedArchetype,
@@ -49,7 +50,7 @@ const PageArchetypeSchema = z.object({
   name: z.string().min(1).max(80),
   category: z.enum(ARCHETYPE_CATEGORIES),
   description: z.string().min(1).max(240),
-  slots: z.array(RawExtractedSlotSchema).min(2).max(40),
+  slots: z.array(RawExtractedSlotSchema).min(2).max(24),
 });
 
 type TPageOutcome =
@@ -90,6 +91,8 @@ Rules:
 
 const STRUCTURED_ATTEMPTS = 2;
 const PAGE_CONCURRENCY = 2;
+const MODEL_TIMEOUT_MS = 60_000;
+export const MAX_DESIGN_PAGES = 12;
 
 class StructuredValidationError extends Error {
   constructor(message: string, cause?: unknown) {
@@ -98,18 +101,43 @@ class StructuredValidationError extends Error {
   }
 }
 
-/** Count page objects directly from PDF syntax, with the page-tree Count as a fallback. */
-export function countPdfPages(pdfBytes: Uint8Array): number {
-  const source = new TextDecoder("latin1").decode(pdfBytes);
-  const pageObjects = source.match(/\/Type\s*\/Page\b/g)?.length ?? 0;
-  if (pageObjects > 0) return pageObjects;
-  const counts = [...source.matchAll(/\/Count\s+(\d+)/g)].map((match) =>
-    Number.parseInt(match[1], 10),
+async function loadPdf(pdfBytes: Uint8Array): Promise<PDFDocument> {
+  try {
+    const document = await PDFDocument.load(pdfBytes, {
+      parseSpeed: ParseSpeeds.Fastest,
+      throwOnInvalidObject: true,
+    });
+    document.getPages();
+    return document;
+  } catch (error) {
+    throw new Error("The design PDF could not be parsed.", { cause: error });
+  }
+}
+
+export async function countPdfPages(pdfBytes: Uint8Array): Promise<number> {
+  return (await loadPdf(pdfBytes)).getPages().length;
+}
+
+export async function prepareDesignPages(
+  pdfBytes: Uint8Array,
+): Promise<Array<Uint8Array>> {
+  const source = await loadPdf(pdfBytes);
+  const pageCount = source.getPages().length;
+  if (pageCount < 1) throw new Error("The design PDF has no pages.");
+  if (pageCount > MAX_DESIGN_PAGES) {
+    throw new Error(
+      `Design PDFs are limited to ${MAX_DESIGN_PAGES} pages; this file has ${pageCount}.`,
+    );
+  }
+
+  return Promise.all(
+    Array.from({ length: pageCount }, async (_, index) => {
+      const pageDocument = await PDFDocument.create();
+      const [page] = await pageDocument.copyPages(source, [index]);
+      pageDocument.addPage(page);
+      return pageDocument.save();
+    }),
   );
-  const pageCount = counts.length > 0 ? Math.max(...counts) : 0;
-  if (pageCount < 1)
-    throw new Error("Could not determine the design PDF page count.");
-  return pageCount;
 }
 
 async function withStructuredRetry<TResult>(
@@ -153,6 +181,7 @@ async function extractPalette(pdfBytes: Uint8Array): Promise<{
         },
       ],
       maxRetries: 0,
+      timeout: MODEL_TIMEOUT_MS,
     });
     return result.output;
   });
@@ -188,6 +217,7 @@ async function extractPageArchetype(
         },
       ],
       maxRetries: 0,
+      timeout: MODEL_TIMEOUT_MS,
     });
     const detail = result.output;
     const category: TArchetypeCategory =
@@ -243,10 +273,9 @@ function fallbackForPage(page: number): IExtractedArchetype {
 }
 
 async function extractEveryPage(
-  pdfBytes: Uint8Array,
-  pageCount: number,
+  pages: Array<Uint8Array>,
 ): Promise<IPageExtractionResult> {
-  const tasks = Array.from({ length: pageCount }, (_, index) => {
+  const tasks = pages.map((pdfBytes, index) => {
     const page = index + 1;
     return async (): Promise<TPageOutcome> => {
       try {
@@ -261,7 +290,7 @@ async function extractEveryPage(
     };
   });
   const archetypes: Array<IExtractedArchetype | undefined> = Array.from({
-    length: pageCount,
+    length: pages.length,
   });
   const fallbackPages: Array<number> = [];
 
@@ -286,7 +315,7 @@ export async function extractDesignSystem(
   pdfBytes: Uint8Array,
 ): Promise<IExtractedDesignSystem> {
   const fonts = extractFonts(pdfBytes);
-  const pageCount = countPdfPages(pdfBytes);
+  const pages = await prepareDesignPages(pdfBytes);
   let palette: { colors: ITokens["colors"]; feel: string };
   try {
     palette = await extractPalette(pdfBytes);
@@ -297,10 +326,7 @@ export async function extractDesignSystem(
       feel: "Palette extraction failed; default colors were used.",
     };
   }
-  const { archetypes, fallbackPages } = await extractEveryPage(
-    pdfBytes,
-    pageCount,
-  );
+  const { archetypes, fallbackPages } = await extractEveryPage(pages);
   const fallbackNote =
     fallbackPages.length > 0
       ? ` Page fallbacks used for: ${fallbackPages.join(", ")}.`

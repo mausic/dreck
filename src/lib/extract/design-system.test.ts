@@ -1,26 +1,37 @@
 import { describe, expect, it } from "vitest";
-import { countPdfPages } from "@/lib/extract/design-system";
+import { PDFDocument } from "pdf-lib";
 
-function pdfBytes(source: string): Uint8Array {
-  return new TextEncoder().encode(source);
+import {
+  MAX_DESIGN_PAGES,
+  countPdfPages,
+  prepareDesignPages,
+} from "@/lib/extract/design-system";
+
+async function pdfBytes(pageCount: number): Promise<Uint8Array> {
+  const document = await PDFDocument.create();
+  for (let index = 0; index < pageCount; index++) document.addPage();
+  return document.save();
 }
 
 describe("countPdfPages", () => {
-  it("counts page objects without confusing the Pages tree", () => {
-    const source = `
-      1 0 obj << /Type /Pages /Count 3 >> endobj
-      2 0 obj << /Type /Page /Parent 1 0 R >> endobj
-      3 0 obj << /Type /Page /Parent 1 0 R >> endobj
-      4 0 obj << /Type /Page /Parent 1 0 R >> endobj
-    `;
-    expect(countPdfPages(pdfBytes(source))).toBe(3);
+  it("reads the page tree through a PDF parser", async () => {
+    expect(await countPdfPages(await pdfBytes(3))).toBe(3);
   });
 
-  it("falls back to the largest page-tree count", () => {
-    expect(countPdfPages(pdfBytes("<< /Type /Pages /Count 4 >>"))).toBe(4);
+  it("creates one isolated PDF per design page", async () => {
+    const pages = await prepareDesignPages(await pdfBytes(3));
+    expect(pages).toHaveLength(3);
+    await expect(Promise.all(pages.map(countPdfPages))).resolves.toEqual([
+      1, 1, 1,
+    ]);
   });
 
-  it("rejects a PDF whose page count cannot be determined", () => {
-    expect(() => countPdfPages(pdfBytes("%PDF-1.4"))).toThrow();
+  it("rejects malformed and oversized design PDFs before model calls", async () => {
+    await expect(
+      countPdfPages(new TextEncoder().encode("%PDF-1.4")),
+    ).rejects.toThrow("could not be parsed");
+    await expect(
+      prepareDesignPages(await pdfBytes(MAX_DESIGN_PAGES + 1)),
+    ).rejects.toThrow(`limited to ${MAX_DESIGN_PAGES} pages`);
   });
 });

@@ -11,7 +11,10 @@ import {
 import { pdfToMarkdown } from "@/lib/extract/mistral";
 import { parseSections } from "@/lib/extract/parse-markdown";
 import { extractDesignSystem } from "@/lib/extract/design-system";
-import { ExtractDocumentInputSchema } from "@/lib/extract/extract-schema";
+import {
+  ExtractDocumentInputSchema,
+  MAX_PDF_BYTES,
+} from "@/lib/extract/extract-schema";
 
 function base64ToBytes(base64: string): Uint8Array {
   const binary = atob(base64);
@@ -21,8 +24,7 @@ function base64ToBytes(base64: string): Uint8Array {
 }
 
 function validatePdf(bytes: Uint8Array): void {
-  // TODO: replace magic-number check with a .env configurable max size
-  if (bytes.byteLength > 15_000_000) {
+  if (bytes.byteLength > MAX_PDF_BYTES) {
     throw new Error("PDF exceeds the 15 MB upload limit.");
   }
   const signature = String.fromCharCode(...bytes.subarray(0, 5));
