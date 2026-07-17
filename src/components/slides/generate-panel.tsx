@@ -32,23 +32,25 @@ const GenerateFormSchema = z.object({
   designDocId: z.string(),
 });
 
-function FieldError({ field }: { field: AnyFieldApi }) {
+function FieldError({ field, id }: { field: AnyFieldApi; id: string }) {
   if (!field.state.meta.isTouched) return null;
   const first = field.state.meta.errors[0];
   if (!first) return null;
   const message = typeof first === "string" ? first : first.message;
-  return <p className="text-destructive text-xs">{message}</p>;
+  return (
+    <p id={id} role="alert" className="text-destructive text-xs">
+      {message}
+    </p>
+  );
 }
 
 function DesignSystemView({
   sourceName,
-  id,
   tokens,
   feel,
   archetypes,
 }: {
   sourceName: string;
-  id: string;
   tokens: ITokens;
   feel?: string | null;
   archetypes?: Array<IExtractedArchetype> | null;
@@ -58,7 +60,7 @@ function DesignSystemView({
       <h3 className="text-sm font-semibold">
         Design system{" "}
         <span className="text-muted-foreground font-normal">
-          ({sourceName} · id {id.slice(0, 8)})
+          ({sourceName})
         </span>
       </h3>
       <div className="flex flex-wrap gap-3">
@@ -231,14 +233,6 @@ export function GeneratePanel() {
     }
   }, [contentData, form]);
 
-  const designData = designDocs.data;
-  useEffect(() => {
-    const first = designData?.[0]?.id;
-    if (first && form.state.values.designDocId === "") {
-      form.setFieldValue("designDocId", first);
-    }
-  }, [designData, form]);
-
   const isGenerating = generation.phase === "generating";
   const editorDeck = generation.deck;
   const flagged = generation.items.flatMap((it, i) =>
@@ -246,6 +240,7 @@ export function GeneratePanel() {
       ? [{ index: i, tokens: it.grounding.issues.map((x) => x.token) }]
       : [],
   );
+  const documentsError = contentDocs.error ?? designDocs.error;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
@@ -277,13 +272,18 @@ export function GeneratePanel() {
                       role="content"
                       id="content-doc"
                       ariaLabel="Content document"
+                      ariaDescribedBy="content-doc-error"
+                      ariaInvalid={
+                        field.state.meta.isTouched &&
+                        field.state.meta.errors.length > 0
+                      }
                       value={field.state.value}
                       onValueChange={field.handleChange}
                       docs={contentDocs.data ?? []}
                       placeholder="Select a content document…"
                       hint="The reference document your slides draw their content from."
                     />
-                    <FieldError field={field} />
+                    <FieldError field={field} id="content-doc-error" />
                   </>
                 )}
               </form.Field>
@@ -317,7 +317,6 @@ export function GeneratePanel() {
               return (
                 <DesignSystemView
                   sourceName={doc.sourceName}
-                  id={doc.id}
                   tokens={doc.designTokens}
                   feel={doc.designFeel}
                   archetypes={doc.designArchetypes}
@@ -337,9 +336,14 @@ export function GeneratePanel() {
                       value={field.state.value}
                       onChange={(e) => field.handleChange(e.target.value)}
                       onBlur={field.handleBlur}
+                      aria-describedby="prompt-error"
+                      aria-invalid={
+                        field.state.meta.isTouched &&
+                        field.state.meta.errors.length > 0
+                      }
                       placeholder="e.g. a deck on the dosing, presentations and safety of the product"
                     />
-                    <FieldError field={field} />
+                    <FieldError field={field} id="prompt-error" />
                   </>
                 )}
               </form.Field>
@@ -356,20 +360,49 @@ export function GeneratePanel() {
           </div>
         </form>
 
+        {documentsError && (
+          <div
+            role="alert"
+            className="border-destructive/50 text-destructive flex flex-wrap items-center justify-between gap-3 rounded-md border p-3 text-sm"
+          >
+            <span>Saved documents could not be loaded.</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void contentDocs.refetch();
+                void designDocs.refetch();
+              }}
+            >
+              Retry
+            </Button>
+          </div>
+        )}
+
         {generation.error && (
-          <p className="border-destructive/50 text-destructive rounded-md border p-3 text-sm">
+          <p
+            role="alert"
+            className="border-destructive/50 text-destructive rounded-md border p-3 text-sm"
+          >
             {generation.error}
           </p>
         )}
 
         {generation.warning && (
-          <p className="border-border text-muted-foreground rounded-md border p-3 text-sm">
+          <p
+            role="status"
+            className="border-border text-muted-foreground rounded-md border p-3 text-sm"
+          >
             {generation.warning}
           </p>
         )}
 
         {flagged.length > 0 && (
-          <p className="border-destructive/40 text-muted-foreground rounded-md border p-3 text-xs">
+          <p
+            role="alert"
+            className="border-destructive/40 text-muted-foreground rounded-md border p-3 text-xs"
+          >
             Grounding flags (kept, not dropped) —{" "}
             {flagged
               .map((f) => `slide ${f.index + 1}: ${f.tokens.join(", ")}`)
@@ -378,7 +411,10 @@ export function GeneratePanel() {
         )}
 
         {generation.items.length > 0 && generation.phase !== "complete" && (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          <div
+            aria-live="polite"
+            className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
+          >
             {generation.items.map((state, i) => (
               <SlotCard
                 key={i}

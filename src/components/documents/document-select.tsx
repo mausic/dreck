@@ -23,11 +23,13 @@ type TDocumentSelectProps = {
   disabled?: boolean;
   id?: string;
   ariaLabel?: string;
+  ariaDescribedBy?: string;
+  ariaInvalid?: boolean;
   className?: string;
 };
 
 function docLabel(doc: TDocOption): string {
-  return `${doc.sourceName} · ${doc.id.slice(0, 8)}`;
+  return doc.sourceName;
 }
 
 export function DocumentSelect({
@@ -39,6 +41,8 @@ export function DocumentSelect({
   disabled,
   id,
   ariaLabel,
+  ariaDescribedBy,
+  ariaInvalid,
   className,
 }: TDocumentSelectProps) {
   return (
@@ -50,6 +54,8 @@ export function DocumentSelect({
       <SelectTrigger
         id={id}
         aria-label={ariaLabel}
+        aria-describedby={ariaDescribedBy}
+        aria-invalid={ariaInvalid}
         className={cn("w-full", className)}
       >
         <SelectValue placeholder={placeholder}>
@@ -114,6 +120,8 @@ type TDocumentPickerProps = {
   /** Id for the select trigger (or the dropzone when there is nothing to select yet). */
   id?: string;
   ariaLabel?: string;
+  ariaDescribedBy?: string;
+  ariaInvalid?: boolean;
 };
 
 export function DocumentPicker({
@@ -126,6 +134,8 @@ export function DocumentPicker({
   noneLabel,
   id,
   ariaLabel,
+  ariaDescribedBy,
+  ariaInvalid,
 }: TDocumentPickerProps) {
   const queryClient = useQueryClient();
   const [upload, setUpload] = useState<TUploadState>(EMPTY_UPLOAD);
@@ -204,6 +214,8 @@ export function DocumentPicker({
           <DocumentSelect
             id={id}
             ariaLabel={ariaLabel}
+            ariaDescribedBy={ariaDescribedBy}
+            ariaInvalid={ariaInvalid}
             value={value}
             onValueChange={onValueChange}
             docs={docs}
@@ -229,10 +241,15 @@ export function DocumentPicker({
         pending={upload.pending}
         status={upload.pending ? "Extracting…" : null}
         onFileSelect={handleFile}
+        ariaDescribedBy={ariaDescribedBy}
+        ariaInvalid={ariaInvalid}
       />
 
       {upload.error && (
-        <p className="border-destructive/50 text-destructive rounded-md border p-3 text-sm">
+        <p
+          role="alert"
+          className="border-destructive/50 text-destructive rounded-md border p-3 text-sm"
+        >
           {upload.error}
         </p>
       )}

@@ -37,6 +37,7 @@ export function SlideEditor({
   onChange,
 }: ISlideEditorProps) {
   const [selection, setSelection] = useState<ISelectionRect | null>(null);
+  const [selectedElementId, setSelectedElementId] = useState("");
   const [instruction, setInstruction] = useState("");
   const [pending, setPending] = useState(false);
   const pendingRef = useRef(false);
@@ -53,8 +54,27 @@ export function SlideEditor({
 
   /** Store the drawn canonical rect as the active selection (`null` clears it). */
   function handleSelectRect(rect: IRect | null) {
+    setSelectedElementId("");
     // Attach the slideId here → the graded { slideId, x, y, width, height } shape.
     setSelection(rect ? { slideId: slide.id, ...rect } : null);
+  }
+
+  function handleElementSelect(elementId: string) {
+    setSelectedElementId(elementId);
+    const element = slide.elements.find(
+      (candidate) => candidate.id === elementId,
+    );
+    setSelection(
+      element
+        ? {
+            slideId: slide.id,
+            x: element.x,
+            y: element.y,
+            width: element.w,
+            height: element.h,
+          }
+        : null,
+    );
   }
 
   /** Whether the current selection + instruction permit an edit. */
@@ -114,6 +134,7 @@ export function SlideEditor({
 
   /** Drop the current selection (and thus the highlight + marquee). */
   function handleClear() {
+    setSelectedElementId("");
     setSelection(null);
   }
 
@@ -133,6 +154,25 @@ export function SlideEditor({
 
       <div className="shrink-0 rounded-xl border bg-card p-3">
         <div className="flex flex-wrap items-center gap-2">
+          <label className="sr-only" htmlFor={`element-select-${slide.id}`}>
+            Select an editable slide element
+          </label>
+          <select
+            id={`element-select-${slide.id}`}
+            value={selectedElementId}
+            onChange={(event) => handleElementSelect(event.currentTarget.value)}
+            disabled={pending}
+            className="border-input bg-background h-9 max-w-full rounded-md border px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <option value="">Select element by keyboard…</option>
+            {slide.elements
+              .filter((element) => element.role !== "block")
+              .map((element, index) => (
+                <option key={element.id} value={element.id}>
+                  {element.role} {index + 1}
+                </option>
+              ))}
+          </select>
           <Input
             value={instruction}
             onChange={(e) => setInstruction(e.currentTarget.value)}
@@ -157,7 +197,10 @@ export function SlideEditor({
           </Button>
         </div>
 
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <div
+          aria-live="polite"
+          className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"
+        >
           <span className="tabular-nums">
             {selection
               ? `${selectedElements.length} element${
@@ -165,10 +208,6 @@ export function SlideEditor({
                 } selected`
               : "Draw a rectangle on the slide to select"}
           </span>
-          {/* The captured canonical rectangle — the graded coordinate example. */}
-          <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-foreground">
-            {selection ? JSON.stringify(selection) : "{ no selection }"}
-          </code>
         </div>
       </div>
     </div>
