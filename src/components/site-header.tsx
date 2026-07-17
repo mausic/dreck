@@ -11,7 +11,7 @@ export function SiteHeader() {
           orientation="vertical"
           className="mx-2 h-4 data-vertical:self-auto"
         />
-        <h1 className="text-base font-medium">Dashboard</h1>
+        <h1 className="text-base font-medium">Slide generator</h1>
         <div className="ml-auto flex items-center gap-2">
           <ThemeSwitcher />
         </div>
