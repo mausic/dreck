@@ -2,7 +2,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { generateObject } from "ai";
 import type { TContentPatch } from "@/lib/ai/content-patch";
 import type { TEditRegionInput, TEditRegionResult } from "@/lib/edit/schema";
-import type { IWireSlide } from "@/lib/generate/schema";
 import type { TSlotContent } from "@/lib/slides/types";
 import { getDb } from "@/db/client";
 import {
@@ -22,6 +21,7 @@ import { verifySlideFit } from "@/lib/ai/fit";
 import { isLabelValue, isPanelContent, toLines } from "@/lib/slides/content";
 import { applyPatch, patchFromUpdates } from "@/lib/slides/edit";
 import { editableElementsInRect } from "@/lib/slides/geometry";
+import { toWireSlide } from "@/lib/slides/wire";
 
 function contentKind(content: TSlotContent): TContentPatch["kind"] {
   if (typeof content === "string") return "text";
@@ -40,24 +40,6 @@ function groundingIssueKey(issue: {
 
 function fitIssueKey(issue: { elementId: string; part?: string }): string {
   return `${issue.elementId}\u0000${issue.part ?? "element"}`;
-}
-
-function toWireSlide(slide: Parameters<typeof applyPatch>[0]): IWireSlide {
-  return {
-    ...slide,
-    elements: slide.elements.map((element) => {
-      const content = element.content;
-      if (
-        typeof content !== "string" &&
-        !Array.isArray(content) &&
-        !isLabelValue(content) &&
-        !isPanelContent(content)
-      ) {
-        throw new Error(`Element ${element.id} has unsupported edit content.`);
-      }
-      return { ...element, content };
-    }),
-  };
 }
 
 export const editRegion = createServerFn({ method: "POST" })

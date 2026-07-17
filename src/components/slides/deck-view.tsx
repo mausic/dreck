@@ -9,17 +9,24 @@ export interface IDeckViewProps {
   deck: IDeck;
   tokens: ITokens;
   slideNumbers: Record<string, number>;
-  onSlideChange: (slide: ISlide, grounding: IGroundingReport) => void;
+  initialRevisions?: Record<string, number>;
+  onSlideChange: (
+    slide: ISlide,
+    grounding: IGroundingReport,
+    revision: number,
+  ) => void;
 }
 
 export function DeckView({
   deck,
   tokens,
   slideNumbers,
+  initialRevisions = {},
   onSlideChange,
 }: IDeckViewProps) {
   const [selectedId, setSelectedId] = useState(deck.slides[0]?.id ?? "");
-  const [revisions, setRevisions] = useState<Record<string, number>>({});
+  const [revisions, setRevisions] =
+    useState<Record<string, number>>(initialRevisions);
 
   if (deck.slides.length === 0) return null;
   const selected =
@@ -32,7 +39,7 @@ export function DeckView({
     grounding: IGroundingReport,
   ) {
     setRevisions((current) => ({ ...current, [next.id]: revision }));
-    onSlideChange(next, grounding);
+    onSlideChange(next, grounding, revision);
   }
 
   return (

@@ -1,7 +1,11 @@
 "use client";
 
-import { IconInnerShadowTop, IconPresentation } from "@tabler/icons-react";
-import { Link } from "@tanstack/react-router";
+import {
+  IconInnerShadowTop,
+  IconLayoutGrid,
+  IconPresentation,
+} from "@tabler/icons-react";
+import { Link, useRouterState } from "@tanstack/react-router";
 import {
   Sidebar,
   SidebarContent,
@@ -14,6 +18,11 @@ import {
 } from "@/components/ui/sidebar";
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
+  const isDecks = pathname === "/decks" || pathname.startsWith("/decks/");
+
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
@@ -35,12 +44,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  isActive
+                  isActive={pathname === "/"}
                   tooltip="New deck"
                   render={<Link to="/" />}
                 >
                   <IconPresentation />
                   <span>New deck</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={isDecks}
+                  tooltip="Generated decks"
+                  render={<Link to="/decks" />}
+                >
+                  <IconLayoutGrid />
+                  <span>Generated decks</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
