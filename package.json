@@ -10,6 +10,7 @@
     "dev": "pnpm run cf-typegen && vite dev --port 3000",
     "generate-routes": "tsr generate",
     "build": "pnpm run cf-typegen && vite build",
+    "typecheck": "tsc --noEmit",
     "preview": "pnpm run build && vite preview",
     "test": "vitest run",
     "deploy": "pnpm run build && wrangler deploy",
@@ -19,6 +20,7 @@
     "db:studio": "drizzle-kit studio",
     "cf-typegen": "wrangler types",
     "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "lint:fix": "pnpm run lint --fix",
     "prepare": "husky"
