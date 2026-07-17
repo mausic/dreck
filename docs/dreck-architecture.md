@@ -2,6 +2,8 @@
 
 Prototype spec for the Drizzle [task](https://petal-echo-01d.notion.site/Training-Materials-3950e2b8170480308d2ace44b3a2f900).
 
+Demo available at: [https://dreck.ryndia.me/](https://dreck.ryndia.me/)
+
 ---
 
 ## 0. What this is (and what it deliberately isn't)
@@ -14,16 +16,16 @@ A single-user prototype: upload a **reference PDF** (content) + a **design PDF**
 
 ## 1. Stack
 
-| Layer                 | Choice                                                                                    | Why                                                                                                                         |
-| --------------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Framework             | TanStack Start (Router + Start)                                                           | Preferred over Next; server functions cover `generate` + `edit`; official CF Workers target                                 |
-| UI                    | React + shadcn/ui + Tailwind                                                              | Editor chrome; slide canvas is plain positioned divs                                                                        |
-| Rectangle selection   | pointer events on the preview + `getBoundingClientRect`                                   | No library needed; it's one draggable box (§5)                                                                              |
-| LLM                   | AI SDK — `streamObject` (generation), `generateObject` (extraction, edits)                | Structured output everywhere; streaming makes slides paint progressively (§4a)                                              |
-| Content extraction    | **table-aware** doc-model (Mistral doc API) or VLM structured output — **not** naive text | PI has a text layer, but linear extraction _scrambles the dosing tables_ (row↔dose links lost); doc-model keeps rows intact |
-| Style extraction      | rasterize design PDF → VLM, **hybrid** with deterministic fonts/colors (§6)               | Design PDF is visual; but it _has_ a text layer, so fonts/colors are knowable exactly                                       |
-| Persistence           | Postgres + Drizzle (small)                                                                | Only two things need to persist: decks and editable prompts                                                                 |
-| PDF export (optional) | Browser Rendering / print CSS                                                             | Only if the "download" nicety is wanted;                                                                                    |
+| Layer               | Choice                                                                                    | Why                                                                                                                         |
+| ------------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Framework           | TanStack Start (Router + Start)                                                           | Preferred over Next; server functions cover `generate` + `edit`; official CF Workers target                                 |
+| UI                  | React + shadcn/ui + Tailwind                                                              | Editor chrome; slide canvas is plain positioned divs                                                                        |
+| Rectangle selection | pointer events on the preview + `getBoundingClientRect`                                   | No library needed; it's one draggable box (§5)                                                                              |
+| LLM                 | AI SDK — `streamObject` (generation), `generateObject` (extraction, edits)                | Structured output everywhere; streaming makes slides paint progressively (§4a)                                              |
+| Content extraction  | **table-aware** doc-model (Mistral doc API) or VLM structured output — **not** naive text | PI has a text layer, but linear extraction _scrambles the dosing tables_ (row↔dose links lost); doc-model keeps rows intact |
+| Style extraction    | rasterize design PDF → VLM, **hybrid** with deterministic fonts/colors (§6)               | Design PDF is visual; but it _has_ a text layer, so fonts/colors are knowable exactly                                       |
+| Persistence         | Postgres + Drizzle (small)                                                                | Only two things need to persist: decks and editable prompts                                                                 |
+| PDF export          | Browser Rendering / print CSS                                                             | Only if the "download" nicety is wanted;                                                                                    |
 
 ---
 
@@ -105,16 +107,7 @@ Output: `{ tokens, archetypes }` against a fixed schema.
 3. **Two-column** — accent-border list (left) + arrow-bullet explainer (right)
 4. **Table + sidebar** — label→right-aligned-bold-figure rows + navy callout panel
 
----
-
-## 7. Deferred: editable prompts
-
-Editable **context-extraction** and **design-system-extraction** prompts were considered for experimentation but are deliberately outside the current prototype scope. Prompt defaults remain versioned in code; the database does not store mutable prompt copies.
-
-- **Canonical defaults live in code** as versioned constants.
-- **No prompt administration UI** is included in this submission.
-
-## 8. References:
+## 7. References:
 
 - [Paracetamol approved PI](./Paracetamol-Approved-PI-26-Nov-2021.pdf)
 - [Pharma Training presentation design](./Pharma_training_presentation_design.pdf)
