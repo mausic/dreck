@@ -27,6 +27,6 @@ MISTRAL_API_KEY=
 # MISTRAL_OCR_MODEL=mistral-ocr-latest
 
 # Postgres (Neon) connection string for Drizzle, over the Neon HTTP driver.
-# The Worker reads this at runtime; drizzle-kit (`pnpm db:push`) reads it from the shell
-# env / .env, not from this file — export it there too when pushing the schema.
+# The Worker reads this at runtime. drizzle-kit reads it from this file as well, with the
+# shell environment as a fallback for CI and other non-local tooling.
 DATABASE_URL=postgresql://neondb_owner:...

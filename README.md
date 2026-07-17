@@ -18,15 +18,20 @@ The product decisions and complete generation/edit flows are documented in
 
 ## Development
 
-Install dependencies and copy the documented variables from `.dev.vars.example` into
-`.dev.vars`.
+Install dependencies, copy the documented variables into `.dev.vars`, and apply the
+checked-in database migration before starting the app.
 
 ```bash
 pnpm install
+cp .dev.vars.example .dev.vars
+pnpm db:migrate
 pnpm dev
 ```
 
 The application runs at `http://localhost:3000`.
+
+PDF uploads are limited to 15 MB. Design PDFs are limited to 12 pages; each page is
+isolated before layout extraction so the full deck is not resent for every archetype.
 
 ## Commands
 
@@ -38,6 +43,7 @@ pnpm lint            # lint application TypeScript
 pnpm typecheck       # run TypeScript without emitting
 pnpm format:check    # verify formatting
 pnpm db:generate     # generate a migration from src/db/schema.ts
+pnpm db:migrate      # apply checked-in migrations
 pnpm db:push         # push the schema to a development database
 pnpm db:studio       # open Drizzle Studio
 ```
@@ -55,8 +61,8 @@ src/
     ai/
       *.ts           shared model, retry, grounding, fit, and concurrency utilities
     documents/       document server functions and query options
-    edit/          region-edit contracts, prompts, and server function
-    generate/      deck planning, filling, contracts, and orchestration
+    edit/            region-edit contracts, prompts, and server function
+    generate/        deck planning, filling, contracts, and orchestration
     extract/         content and design-system extraction
     slides/          pure slide domain, schemas, geometry, rendering contracts
   routes/            TanStack file routes
@@ -72,3 +78,16 @@ database boundaries.
 `documents` stores extracted content or design systems. `decks` records the source documents,
 prompt, plan, design snapshot, lifecycle status, and generation counts. `slides` stores the
 canonical slide JSON, grounding report, stable logical ID, order, and edit revision.
+
+## Deployment Security
+
+The Worker configuration disables both `workers.dev` and preview URLs. Before deploying
+the custom hostname, create a Cloudflare Access self-hosted application for
+`dreck.ryndia.me` and add an Allow policy for the intended user. Access applications deny
+unmatched requests by default and check every request before it reaches the paid AI server
+functions.
+
+See Cloudflare's
+[self-hosted application guide](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)
+for the dashboard setup. Store `GOOGLE_GENERATIVE_AI_API_KEY`, `MISTRAL_API_KEY`, and
+`DATABASE_URL` as Worker secrets before running `pnpm deploy`.

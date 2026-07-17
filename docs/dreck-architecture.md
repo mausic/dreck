@@ -107,12 +107,12 @@ Output: `{ tokens, archetypes }` against a fixed schema.
 
 ---
 
-## 7. Two editable prompts
+## 7. Deferred: editable prompts
 
-User-editable **context-extraction** and **design-system-extraction** prompts, tunable in the web UI to test variations.
+Editable **context-extraction** and **design-system-extraction** prompts were considered for experimentation but are deliberately outside the current prototype scope. Prompt defaults remain versioned in code; the database does not store mutable prompt copies.
 
-- **Canonical default lives in code** — a versioned constant in the repo.
-- **DB stores the active copy**, seeded from the code default on first run; the UI overrides it for experimentation, with a **"reset to code default"** button.
+- **Canonical defaults live in code** as versioned constants.
+- **No prompt administration UI** is included in this submission.
 
 ## 8. References:
 
