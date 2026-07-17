@@ -100,6 +100,9 @@ export const DARK_TEXT_STYLE_REFS = new Set<string>([
 const STYLE_PRESETS: Record<string, CSSProperties> = {
   // — Title archetype (light text on a full-bleed primary stage) —
   [STYLE_REF.titleBg]: {
+    inset: 0,
+    width: "100%",
+    height: "100%",
     background: "var(--slide-primary)",
   },
   [STYLE_REF.titleLogo]: {
@@ -339,6 +342,9 @@ const STYLE_PRESETS: Record<string, CSSProperties> = {
 
   // — Section divider: minimal, light surface stage with a big navy title —
   [STYLE_REF.dividerBg]: {
+    inset: 0,
+    width: "100%",
+    height: "100%",
     background: "var(--slide-surface)",
   },
   [STYLE_REF.dividerEyebrow]: {
