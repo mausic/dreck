@@ -73,7 +73,7 @@ function PdfDeckDocument({
         {fonts && <link rel="stylesheet" href={fonts.href} />}
         <style>{PRINT_CSS}</style>
       </head>
-      <body data-pdf-ready>
+      <body data-pdf-document>
         {slides.map((slide, index) => (
           <section
             key={slide.id}
