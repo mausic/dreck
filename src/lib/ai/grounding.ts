@@ -19,7 +19,7 @@ function normalize(s: string): string {
   return s
     .toLowerCase()
     .replace(/[–—]/g, "-") // unify en/em dashes to hyphen
-    .replace(/µ/g, "u") // micro sign → u (mcg/ug/µg all compare)
+    .replace(/(?:mcg|µg|ug)/g, "ug")
     .replace(/\bto\b/g, "-") // "10 to 15" ⇢ range separator
     .replace(/,/g, "") // 1,000 ⇢ 1000
     .replace(/\s+/g, ""); // spacing is not significant for a figure
@@ -40,7 +40,16 @@ export function verifySlideGrounding(
   slide: ISlide,
   sourceMarkdown: string,
 ): IGroundingReport {
-  const normSource = normalize(sourceMarkdown);
+  const sourceFigures = new Set(
+    extractFigures(sourceMarkdown).map((figure) => normalize(figure)),
+  );
+  const sourceRows = sourceMarkdown
+    .split(/\r?\n/)
+    .map(
+      (line) =>
+        new Set(extractFigures(line).map((figure) => normalize(figure))),
+    )
+    .filter((figures) => figures.size > 0);
   const issues: Array<IGroundingIssue> = [];
 
   for (const element of slide.elements) {
@@ -49,11 +58,30 @@ export function verifySlideGrounding(
       const key = normalize(raw);
       if (key.length === 0 || seen.has(key)) continue;
       seen.add(key);
-      if (!normSource.includes(key)) {
+      if (!sourceFigures.has(key)) {
         issues.push({
           elementId: element.id,
           role: element.role,
           token: raw.trim(),
+        });
+      }
+    }
+
+    if (isLabelValue(element.content)) {
+      const rowFigures = extractFigures(
+        `${element.content.label} ${element.content.value}`,
+      ).map((figure) => normalize(figure));
+      const allFiguresExist = rowFigures.every((figure) =>
+        sourceFigures.has(figure),
+      );
+      const figuresShareSourceRow = sourceRows.some((sourceRow) =>
+        rowFigures.every((figure) => sourceRow.has(figure)),
+      );
+      if (rowFigures.length > 1 && allFiguresExist && !figuresShareSourceRow) {
+        issues.push({
+          elementId: element.id,
+          role: element.role,
+          token: `${element.content.label}: ${element.content.value}`,
         });
       }
     }

@@ -78,4 +78,45 @@ describe("verifySlideGrounding", () => {
     );
     expect(report.ok).toBe(true);
   });
+
+  it("does not ground a shorter dose inside a larger source dose", () => {
+    const report = verifySlideGrounding(
+      slide([el("a", "Unsupported 25 mg dose")]),
+      SOURCE,
+    );
+
+    expect(report.issues).toEqual([
+      expect.objectContaining({ elementId: "a", token: "25 mg" }),
+    ]);
+  });
+
+  it("requires table figures to appear together in one source row", () => {
+    const source = `
+| Weight | Dose | Interval |
+| --- | --- | --- |
+| 10-15 kg | 120 mg | 4 hours |
+| 16-20 kg | 160 mg | 6 hours |
+`;
+    const report = verifySlideGrounding(
+      slide([el("a", { label: "10-15 kg", value: "160 mg" }, "tableRow")]),
+      source,
+    );
+
+    expect(report.ok).toBe(false);
+    expect(report.issues).toEqual([
+      expect.objectContaining({
+        elementId: "a",
+        token: "10-15 kg: 160 mg",
+      }),
+    ]);
+  });
+
+  it("normalizes microgram unit spellings", () => {
+    const report = verifySlideGrounding(
+      slide([el("a", "Dose 50 mcg")]),
+      "Dose: 50 µg",
+    );
+
+    expect(report.ok).toBe(true);
+  });
 });

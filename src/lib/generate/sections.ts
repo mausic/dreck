@@ -50,7 +50,15 @@ export function selectSections(
     const found = byId.get(id);
     if (found) {
       seen.add(id);
-      out.push(found);
+      if (found.content.trim().length > 0) {
+        out.push(found);
+      } else {
+        out.push(
+          ...flattenSections(found.children ?? []).filter(
+            (section) => section.content.trim().length > 0,
+          ),
+        );
+      }
     }
   }
   return out;

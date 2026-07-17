@@ -5,6 +5,7 @@ import type { TSlidePlan } from "@/lib/generate/schema";
 import type { TDocOverview } from "@/lib/generate/sections";
 import { MAX_SLIDES, SlidePlanSchema } from "@/lib/generate/schema";
 import { PLAN_SYSTEM_PROMPT, buildPlanPrompt } from "@/lib/generate/prompt";
+import { flattenSections } from "@/lib/generate/sections";
 import { getGenerateModel } from "@/lib/ai/model";
 import { withModelRetry } from "@/lib/ai/retry";
 
@@ -26,8 +27,11 @@ export async function planDeck(
 }
 
 export function fallbackPlan(sections: Array<ISection>): TSlidePlan {
-  const roots = sections.filter((s) => s.kind !== "preamble");
-  const chosen = (roots.length > 0 ? roots : sections).slice(
+  const substantive = flattenSections(sections).filter(
+    (section) =>
+      section.kind !== "preamble" && section.content.trim().length > 0,
+  );
+  const chosen = (substantive.length > 0 ? substantive : sections).slice(
     0,
     Math.min(3, MAX_SLIDES),
   );
