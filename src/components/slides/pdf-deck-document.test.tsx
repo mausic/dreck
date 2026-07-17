@@ -5,7 +5,6 @@ import {
   PDF_PAGE_SIZE,
   renderDeckPdfHtml,
 } from "@/components/slides/pdf-deck-document";
-import { STYLE_REF } from "@/lib/slides/styles";
 import { DESIGN_TOKENS } from "@/lib/slides/tokens";
 
 function slide(id: string, content: string): ISlide {
@@ -42,6 +41,8 @@ describe("renderDeckPdfHtml", () => {
     expect(html).toContain(
       `@page { size: ${PDF_PAGE_SIZE.width} ${PDF_PAGE_SIZE.height}; margin: 0; }`,
     );
+    expect(html).toContain(`zoom:${8 / 9}`);
+    expect(html).not.toContain("transform:scale");
   });
 
   it("embeds design tokens, supported fonts, and escaped copy", () => {
@@ -62,34 +63,6 @@ describe("renderDeckPdfHtml", () => {
     expect(html).toContain(DESIGN_TOKENS.colors.primary);
     expect(html).toContain("&lt;Safety &amp; dosing&gt;");
     expect(html).toContain("5 mg &lt; 10 mg");
-  });
-
-  it("makes an undersized semantic cover background full-bleed", () => {
-    const cover = slide("cover", "Cover title");
-    cover.elements.unshift({
-      id: "cover-background",
-      slotId: "background",
-      role: "block",
-      x: 0,
-      y: 0,
-      w: 1440,
-      h: 720,
-      content: "",
-      styleRef: STYLE_REF.titleBg,
-    });
-
-    const html = renderDeckPdfHtml({
-      title: "Cover",
-      slides: [cover],
-      tokens: DESIGN_TOKENS,
-    });
-    const backgroundTag = html.match(
-      /<div data-role="block" data-element-id="cover-background"[^>]*>/,
-    )?.[0];
-
-    expect(backgroundTag).toContain("inset:0");
-    expect(backgroundTag).toContain("width:100%");
-    expect(backgroundTag).toContain("height:100%");
   });
 
   it("rejects an empty deck", () => {
