@@ -6,7 +6,7 @@ import type { TDocOverview } from "@/lib/generate/sections";
 import { MAX_SLIDES, SlidePlanSchema } from "@/lib/generate/schema";
 import { PLAN_SYSTEM_PROMPT, buildPlanPrompt } from "@/lib/generate/prompt";
 import { flattenSections } from "@/lib/generate/sections";
-import { getGenerateModel } from "@/lib/ai/model";
+import { MODEL_TIMEOUT_MS, getGenerateModel } from "@/lib/ai/model";
 import { withModelRetry } from "@/lib/ai/retry";
 
 export async function planDeck(
@@ -21,6 +21,7 @@ export async function planDeck(
       system: PLAN_SYSTEM_PROMPT,
       prompt: buildPlanPrompt(brief, overview, archetypes),
       maxRetries: 0,
+      abortSignal: AbortSignal.timeout(MODEL_TIMEOUT_MS),
     }),
   );
   return result.object;

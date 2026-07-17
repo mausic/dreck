@@ -165,6 +165,7 @@ export const generateDeck = createServerFn({ method: "POST" })
     const plannerArchetypes = design.archetypes ?? ARCHETYPE_FAMILY_DESCRIPTORS;
 
     let plan: TSlidePlan;
+    let planWarning: string | undefined;
     try {
       plan = await planDeck(
         data.prompt,
@@ -173,6 +174,8 @@ export const generateDeck = createServerFn({ method: "POST" })
       );
       if (!isPlanGroundedToSections(plan, doc.sections)) {
         plan = fallbackPlan(doc.sections);
+        planWarning =
+          "The planner returned unsupported source sections, so a deterministic fallback plan was used.";
       }
     } catch (error) {
       if (isFatalProviderError(error)) {
@@ -180,6 +183,8 @@ export const generateDeck = createServerFn({ method: "POST" })
         return;
       }
       plan = fallbackPlan(doc.sections);
+      planWarning =
+        "The planner was unavailable, so a deterministic fallback plan was used.";
     }
 
     let deckId: string;
@@ -202,7 +207,13 @@ export const generateDeck = createServerFn({ method: "POST" })
     let status: "complete" | "partial" | "failed" = "failed";
 
     try {
-      yield { type: "plan", deckId, plan, tokens: design.tokens };
+      yield {
+        type: "plan",
+        deckId,
+        plan,
+        tokens: design.tokens,
+        warning: planWarning,
+      };
 
       const perSlide = plan.slides.map((item, index) => ({
         item,

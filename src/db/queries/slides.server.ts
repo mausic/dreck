@@ -13,6 +13,7 @@ type TDb = ReturnType<typeof getDb>;
 export interface ISlideEditContext {
   slide: ISlide;
   revision: number;
+  grounding: IGroundingReport;
   tokens: ITokens;
   sourceMarkdown: string;
 }
@@ -26,6 +27,7 @@ export async function loadSlideForEdit(
     .select({
       slide: slides.slide,
       revision: slides.revision,
+      grounding: slides.grounding,
       tokens: decks.designTokens,
       sourceMarkdown: documents.markdown,
     })
@@ -40,6 +42,9 @@ export async function loadSlideForEdit(
   return {
     slide: SlideSchema.parse(row.slide),
     revision: row.revision,
+    grounding: GroundingReportSchema.parse(
+      row.grounding ?? { ok: true, issues: [] },
+    ),
     tokens: TokensSchema.parse(row.tokens),
     sourceMarkdown: row.sourceMarkdown,
   };

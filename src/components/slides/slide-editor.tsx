@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import type { IGroundingReport } from "@/lib/generate/schema";
 import type { IRect, ISelectionRect, ISlide, ITokens } from "@/lib/slides";
 import { applyPatch, editableElementsInRect } from "@/lib/slides";
 import { editRegion } from "@/lib/edit/region";
@@ -12,7 +13,11 @@ export interface ISlideEditorProps {
   slide: ISlide;
   revision: number;
   tokens: ITokens;
-  onChange: (slide: ISlide, revision: number) => void;
+  onChange: (
+    slide: ISlide,
+    revision: number,
+    grounding: IGroundingReport,
+  ) => void;
 }
 
 /**
@@ -34,6 +39,7 @@ export function SlideEditor({
   const [selection, setSelection] = useState<ISelectionRect | null>(null);
   const [instruction, setInstruction] = useState("");
   const [pending, setPending] = useState(false);
+  const pendingRef = useRef(false);
 
   // Hit-test is derived, never stored: single source of truth is the canonical rect.
   const selectedElements = useMemo(
@@ -61,7 +67,8 @@ export function SlideEditor({
    * failure leaves the deck untouched and surfaces a toast — never a crash.
    */
   async function handleApply() {
-    if (!canApply || !selection) return;
+    if (!canApply || !selection || pendingRef.current) return;
+    pendingRef.current = true;
     setPending(true);
     try {
       const result = await editRegion({
@@ -79,10 +86,18 @@ export function SlideEditor({
         },
       });
       if (result.ok) {
-        onChange(applyPatch(slide, result.patch), result.revision);
+        onChange(
+          applyPatch(slide, result.patch),
+          result.revision,
+          result.grounding,
+        );
       } else {
         if (result.conflict) {
-          onChange(result.conflict.slide, result.conflict.revision);
+          onChange(
+            result.conflict.slide,
+            result.conflict.revision,
+            result.conflict.grounding,
+          );
         }
         toast.error("Edit not applied", { description: result.error });
       }
@@ -92,6 +107,7 @@ export function SlideEditor({
           "Couldn't reach the editor. Check your connection and try again.",
       });
     } finally {
+      pendingRef.current = false;
       setPending(false);
     }
   }
@@ -110,7 +126,7 @@ export function SlideEditor({
             tokens={tokens}
             selectedIds={selectedIds}
             selectionRect={selection}
-            onSelectRect={handleSelectRect}
+            onSelectRect={pending ? undefined : handleSelectRect}
           />
         </div>
       </div>
@@ -121,7 +137,7 @@ export function SlideEditor({
             value={instruction}
             onChange={(e) => setInstruction(e.currentTarget.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") handleApply();
+              if (e.key === "Enter") void handleApply();
             }}
             placeholder='Edit instruction — e.g. "make this more concise"'
             className="h-9 min-w-56 flex-1"

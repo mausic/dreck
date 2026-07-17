@@ -14,7 +14,7 @@ import {
   expectedKind,
   fillableSlots,
 } from "@/lib/generate/prompt";
-import { getGenerateModel } from "@/lib/ai/model";
+import { MODEL_TIMEOUT_MS, getGenerateModel } from "@/lib/ai/model";
 import { withModelRetry } from "@/lib/ai/retry";
 
 export interface IFillSlideArgs {
@@ -91,6 +91,7 @@ export async function fillSlide(args: IFillSlideArgs): Promise<IWireSlide> {
         failureNote: args.failureNote,
       }),
       maxRetries: 0,
+      abortSignal: AbortSignal.timeout(MODEL_TIMEOUT_MS),
     });
 
     for await (const partial of result.partialObjectStream) {

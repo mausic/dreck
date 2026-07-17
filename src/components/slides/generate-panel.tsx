@@ -362,6 +362,12 @@ export function GeneratePanel() {
           </p>
         )}
 
+        {generation.warning && (
+          <p className="border-border text-muted-foreground rounded-md border p-3 text-sm">
+            {generation.warning}
+          </p>
+        )}
+
         {flagged.length > 0 && (
           <p className="border-destructive/40 text-muted-foreground rounded-md border p-3 text-xs">
             Grounding flags (kept, not dropped) —{" "}
@@ -389,6 +395,7 @@ export function GeneratePanel() {
         <DeckView
           deck={editorDeck}
           tokens={generation.tokens}
+          slideNumbers={generation.slideNumbers}
           onSlideChange={generation.updateSlide}
         />
       )}

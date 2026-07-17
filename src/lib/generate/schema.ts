@@ -80,7 +80,13 @@ export type TGenerateDeckInput = z.input<typeof GenerateDeckInputSchema>;
 export type TGenerateDeckData = z.output<typeof GenerateDeckInputSchema>;
 
 export type TGenerationEvent =
-  | { type: "plan"; deckId: string; plan: TSlidePlan; tokens: ITokens }
+  | {
+      type: "plan";
+      deckId: string;
+      plan: TSlidePlan;
+      tokens: ITokens;
+      warning?: string;
+    }
   | {
       type: "slide";
       index: number;

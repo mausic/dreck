@@ -17,7 +17,8 @@ import {
 } from "@/lib/edit/schema";
 import { EDIT_SYSTEM_PROMPT, buildEditPrompt } from "@/lib/edit/prompt";
 import { verifySlideGrounding } from "@/lib/ai/grounding";
-import { getEditModel } from "@/lib/ai/model";
+import { MODEL_TIMEOUT_MS, getEditModel } from "@/lib/ai/model";
+import { verifySlideFit } from "@/lib/ai/fit";
 import { isLabelValue, isPanelContent, toLines } from "@/lib/slides/content";
 import { applyPatch, patchFromUpdates } from "@/lib/slides/edit";
 import { editableElementsInRect } from "@/lib/slides/geometry";
@@ -35,6 +36,10 @@ function groundingIssueKey(issue: {
   token: string;
 }): string {
   return `${issue.elementId}\u0000${issue.token}`;
+}
+
+function fitIssueKey(issue: { elementId: string; part?: string }): string {
+  return `${issue.elementId}\u0000${issue.part ?? "element"}`;
 }
 
 function toWireSlide(slide: Parameters<typeof applyPatch>[0]): IWireSlide {
@@ -69,6 +74,7 @@ export const editRegion = createServerFn({ method: "POST" })
           conflict: {
             slide: toWireSlide(stored.slide),
             revision: stored.revision,
+            grounding: stored.grounding,
           },
         };
       }
@@ -103,6 +109,7 @@ export const editRegion = createServerFn({ method: "POST" })
         system: EDIT_SYSTEM_PROMPT,
         prompt: buildEditPrompt(modelData),
         maxRetries: 1,
+        abortSignal: AbortSignal.timeout(MODEL_TIMEOUT_MS),
       });
 
       const updatesById = new Map<string, (typeof object.updates)[number]>();
@@ -136,18 +143,41 @@ export const editRegion = createServerFn({ method: "POST" })
         }
       }
 
-      const patch = patchFromUpdates(
-        object.updates.map((u) => ({
-          elementId: u.elementId,
-          content: toSlotContent(u.content),
-        })),
-        allowedIds,
+      const currentContent = new Map(
+        selected.map((element) => [element.id, element.content]),
       );
+      const changedUpdates = object.updates
+        .map((update) => ({
+          elementId: update.elementId,
+          content: toSlotContent(update.content),
+        }))
+        .filter(
+          (update) =>
+            JSON.stringify(currentContent.get(update.elementId)) !==
+            JSON.stringify(update.content),
+        );
+      const patch = patchFromUpdates(changedUpdates, allowedIds);
 
       if (Object.keys(patch).length === 0) {
         return { ok: false, error: "The edit produced no changes to apply." };
       }
       const nextSlide = applyPatch(stored.slide, patch);
+      const previousFit = verifySlideFit(stored.slide);
+      const previousFitByElement = new Map(
+        previousFit.issues.map((issue) => [fitIssueKey(issue), issue]),
+      );
+      const worsenedFit = verifySlideFit(nextSlide).issues.filter((issue) => {
+        if (!allowedIds.has(issue.elementId)) return false;
+        const previous = previousFitByElement.get(fitIssueKey(issue));
+        return !previous || issue.chars > previous.chars;
+      });
+      if (worsenedFit.length > 0) {
+        return {
+          ok: false,
+          error:
+            "The edited copy does not fit the selected region. Try asking for a shorter version.",
+        };
+      }
       const previousGrounding = verifySlideGrounding(
         stored.slide,
         stored.sourceMarkdown,
@@ -182,10 +212,11 @@ export const editRegion = createServerFn({ method: "POST" })
           conflict: {
             slide: toWireSlide(current.slide),
             revision: current.revision,
+            grounding: current.grounding,
           },
         };
       }
-      return { ok: true, patch, revision };
+      return { ok: true, patch, revision, grounding };
     } catch (error) {
       console.error(
         JSON.stringify({

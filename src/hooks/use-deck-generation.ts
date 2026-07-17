@@ -16,6 +16,7 @@ export type TGenerationSlot =
 export interface IDeckGenerationState {
   phase: TGenerationPhase;
   error: string | null;
+  warning: string | null;
   items: Array<TGenerationSlot>;
   deck: IDeck | null;
   tokens: ITokens;
@@ -32,15 +33,30 @@ type TGenerationAction =
       slides: Array<ISlide>;
     }
   | { type: "failed"; message: string }
-  | { type: "slide-changed"; slide: ISlide };
+  | {
+      type: "slide-changed";
+      slide: ISlide;
+      grounding: IGroundingReport;
+    };
 
 export const initialDeckGenerationState: IDeckGenerationState = {
   phase: "idle",
   error: null,
+  warning: null,
   items: [],
   deck: null,
   tokens: DESIGN_TOKENS,
 };
+
+export function slideNumbersFromItems(
+  items: Array<TGenerationSlot>,
+): Record<string, number> {
+  return Object.fromEntries(
+    items.flatMap((item, index) =>
+      item.status === "ready" ? [[item.slide.id, index + 1]] : [],
+    ),
+  );
+}
 
 export function deckGenerationReducer(
   state: IDeckGenerationState,
@@ -53,6 +69,7 @@ export function deckGenerationReducer(
       return {
         ...state,
         tokens: action.event.tokens,
+        warning: action.event.warning ?? null,
         items: action.event.plan.slides.map((slide) => ({
           status: "pending",
           title: slide.title,
@@ -103,24 +120,34 @@ export function deckGenerationReducer(
             : null,
         error:
           action.event.status === "partial"
-            ? `${action.event.generatedSlideCount} of ${action.event.expectedSlideCount} slides were generated.`
+            ? (state.error ??
+              `${action.event.generatedSlideCount} of ${action.event.expectedSlideCount} slides were generated.`)
             : state.error,
       };
     }
     case "failed":
       return { ...state, phase: "failed", error: action.message };
     case "slide-changed":
-      return state.deck
-        ? {
-            ...state,
-            deck: {
+      return {
+        ...state,
+        deck: state.deck
+          ? {
               ...state.deck,
               slides: state.deck.slides.map((slide) =>
                 slide.id === action.slide.id ? action.slide : slide,
               ),
-            },
-          }
-        : state;
+            }
+          : null,
+        items: state.items.map((item) =>
+          item.status === "ready" && item.slide.id === action.slide.id
+            ? {
+                status: "ready",
+                slide: action.slide,
+                grounding: action.grounding,
+              }
+            : item,
+        ),
+      };
   }
 }
 
@@ -170,6 +197,7 @@ export function useDeckGeneration() {
           dispatch({ type: "done", event, slides });
         }
       }
+      if (runId !== activeRun.current) return;
       if (!sawDone) {
         dispatch({
           type: "failed",
@@ -177,6 +205,7 @@ export function useDeckGeneration() {
         });
       }
     } catch (error) {
+      if (runId !== activeRun.current) return;
       dispatch({
         type: "failed",
         message: error instanceof Error ? error.message : "Generation failed.",
@@ -186,7 +215,9 @@ export function useDeckGeneration() {
 
   return {
     ...state,
+    slideNumbers: slideNumbersFromItems(state.items),
     generate,
-    updateSlide: (slide: ISlide) => dispatch({ type: "slide-changed", slide }),
+    updateSlide: (slide: ISlide, grounding: IGroundingReport) =>
+      dispatch({ type: "slide-changed", slide, grounding }),
   };
 }

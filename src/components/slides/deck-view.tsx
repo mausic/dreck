@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { IGroundingReport } from "@/lib/generate/schema";
 import type { IDeck, ISlide, ITokens } from "@/lib/slides";
 import { SlidePreview } from "@/components/slides/slide-preview";
 import { SlideEditor } from "@/components/slides/slide-editor";
@@ -7,10 +8,16 @@ import { cn } from "@/lib/utils";
 export interface IDeckViewProps {
   deck: IDeck;
   tokens: ITokens;
-  onSlideChange: (slide: ISlide) => void;
+  slideNumbers: Record<string, number>;
+  onSlideChange: (slide: ISlide, grounding: IGroundingReport) => void;
 }
 
-export function DeckView({ deck, tokens, onSlideChange }: IDeckViewProps) {
+export function DeckView({
+  deck,
+  tokens,
+  slideNumbers,
+  onSlideChange,
+}: IDeckViewProps) {
   const [selectedId, setSelectedId] = useState(deck.slides[0]?.id ?? "");
   const [revisions, setRevisions] = useState<Record<string, number>>({});
 
@@ -19,9 +26,13 @@ export function DeckView({ deck, tokens, onSlideChange }: IDeckViewProps) {
     deck.slides.find((slide) => slide.id === selectedId) ?? deck.slides[0];
 
   /** Advance the local revision and update the canonical deck through the parent reducer. */
-  function handleSlideChange(next: ISlide, revision: number) {
+  function handleSlideChange(
+    next: ISlide,
+    revision: number,
+    grounding: IGroundingReport,
+  ) {
     setRevisions((current) => ({ ...current, [next.id]: revision }));
-    onSlideChange(next);
+    onSlideChange(next, grounding);
   }
 
   return (
@@ -32,13 +43,14 @@ export function DeckView({ deck, tokens, onSlideChange }: IDeckViewProps) {
       >
         {deck.slides.map((slide, index) => {
           const isActive = slide.id === selected.id;
+          const slideNumber = slideNumbers[slide.id] ?? index + 1;
           return (
             <button
               key={slide.id}
               type="button"
               onClick={() => setSelectedId(slide.id)}
               aria-current={isActive}
-              aria-label={`Slide ${index + 1}`}
+              aria-label={`Slide ${slideNumber}`}
               className={cn(
                 "relative aspect-video w-40 shrink-0 overflow-hidden rounded-md border-2 bg-card transition-colors xl:w-full",
                 isActive
@@ -48,7 +60,7 @@ export function DeckView({ deck, tokens, onSlideChange }: IDeckViewProps) {
             >
               <SlidePreview slide={slide} tokens={tokens} />
               <span className="absolute left-1.5 top-1.5 rounded bg-black/55 px-1.5 py-0.5 text-xs font-medium text-white">
-                {index + 1}
+                {slideNumber}
               </span>
             </button>
           );

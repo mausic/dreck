@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { TWireContent } from "@/lib/ai/content-patch";
-import type { IWireSlide } from "@/lib/generate/schema";
+import type { IGroundingReport, IWireSlide } from "@/lib/generate/schema";
 import { toSlotContent, zContentPatch } from "@/lib/ai/content-patch";
 import { SlotContentSchema } from "@/lib/slides/slide-schema";
 import { TokensSchema } from "@/lib/slides/tokens";
@@ -82,9 +82,18 @@ export const EditPatchSchema = z.object({
 export type TEditPatchResult = z.infer<typeof EditPatchSchema>;
 
 export type TEditRegionResult =
-  | { ok: true; patch: TWirePatch; revision: number }
+  | {
+      ok: true;
+      patch: TWirePatch;
+      revision: number;
+      grounding: IGroundingReport;
+    }
   | {
       ok: false;
       error: string;
-      conflict?: { slide: IWireSlide; revision: number };
+      conflict?: {
+        slide: IWireSlide;
+        revision: number;
+        grounding: IGroundingReport;
+      };
     };
