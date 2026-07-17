@@ -19,7 +19,7 @@ type TDocumentSelectProps = {
   onValueChange: (value: string) => void;
   docs: Array<TDocOption>;
   placeholder?: string;
-  noneLabel?: string;
+  emptyLabel?: string;
   disabled?: boolean;
   id?: string;
   ariaLabel?: string;
@@ -37,7 +37,7 @@ export function DocumentSelect({
   onValueChange,
   docs,
   placeholder = "Select a document…",
-  noneLabel,
+  emptyLabel,
   disabled,
   id,
   ariaLabel,
@@ -60,14 +60,13 @@ export function DocumentSelect({
       >
         <SelectValue placeholder={placeholder}>
           {(selected: string | null) => {
-            if (selected == null) return noneLabel ?? placeholder;
+            if (selected == null) return emptyLabel ?? placeholder;
             const doc = docs.find((d) => d.id === selected);
             return doc ? docLabel(doc) : selected;
           }}
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
-        {noneLabel != null && <SelectItem value={null}>{noneLabel}</SelectItem>}
         {docs.map((doc) => (
           <SelectItem key={doc.id} value={doc.id}>
             {docLabel(doc)}
@@ -116,7 +115,7 @@ type TDocumentPickerProps = {
   /** Helper line shown in the dropzone's empty state. */
   hint: string;
   placeholder?: string;
-  noneLabel?: string;
+  emptyLabel?: string;
   /** Id for the select trigger (or the dropzone when there is nothing to select yet). */
   id?: string;
   ariaLabel?: string;
@@ -131,7 +130,7 @@ export function DocumentPicker({
   docs,
   hint,
   placeholder,
-  noneLabel,
+  emptyLabel,
   id,
   ariaLabel,
   ariaDescribedBy,
@@ -220,7 +219,7 @@ export function DocumentPicker({
             onValueChange={onValueChange}
             docs={docs}
             placeholder={placeholder}
-            noneLabel={noneLabel}
+            emptyLabel={emptyLabel}
             disabled={upload.pending}
           />
           <div className="text-muted-foreground flex items-center gap-2 text-xs">

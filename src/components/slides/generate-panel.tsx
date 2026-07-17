@@ -28,7 +28,6 @@ import { Textarea } from "@/components/ui/textarea";
 const GenerateFormSchema = z.object({
   contentDocId: z.string().min(1, "Pick a content document"),
   prompt: z.string().trim().min(1, "Describe the deck"),
-  // Always a string — "" means "no design doc → default tokens" (see the picker's `noneLabel`).
   designDocId: z.string(),
 });
 
@@ -299,7 +298,7 @@ export function GeneratePanel() {
                     value={field.state.value}
                     onValueChange={field.handleChange}
                     docs={designDocs.data ?? []}
-                    noneLabel="Default tokens"
+                    emptyLabel="Select design reference"
                     hint="The styled deck whose fonts, palette, and layouts define the look."
                   />
                 )}
