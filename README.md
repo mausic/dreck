@@ -7,6 +7,12 @@ JSON; renders it in a canonical 16:9 canvas; and persists revision-checked regio
 The product decisions and complete generation/edit flows are documented in
 [`docs/dreck-architecture.md`](docs/dreck-architecture.md).
 
+## Demo
+
+Demo available at: [https://dreck.ryndia.me/](https://dreck.ryndia.me/).
+
+Protected by CloudFlare. Enter your email, receive OTP, enter OTP -> get your access to demo
+
 ## Stack
 
 - TanStack Start and React 19
